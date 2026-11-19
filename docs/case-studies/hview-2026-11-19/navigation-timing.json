@@ -1,0 +1,176 @@
+{
+  "target": "https://hview.in/",
+  "method": "Navigation Timing Level 2 entries read with JavaScript after each page load in a Chromium-based browser (Claude desktop app browser pane, Chrome 156 engine, Windows 10 x64). Runs 2-5 add a unique query string (?td_run=N) so each is a fresh document request; subresources may be served from the browser cache.",
+  "pageVisibility": "The browser pane was in the background, so paint metrics (FCP, LCP) were not recorded and are excluded.",
+  "networkHint": {
+    "effectiveType": "4g",
+    "rttMs": 50,
+    "downlinkMbps": 10,
+    "source": "navigator.connection (browser estimate, not a measurement)"
+  },
+  "runs": [
+    {
+      "run": 1,
+      "at": "2026-11-19T04:24:22.766Z",
+      "url": "https://hview.in/",
+      "status": 200,
+      "protocol": "h3",
+      "redirects": 0,
+      "dnsMs": 0,
+      "connectMs": 58,
+      "tlsMs": 57.5,
+      "ttfbMs": 234.6,
+      "requestToFirstByteMs": 171.2,
+      "downloadMs": 82.3,
+      "domContentLoadedMs": 636.6,
+      "loadMs": 1318.9,
+      "transferBytes": 115686,
+      "note": "New connection (connect + TLS measured). DNS 0 ms: name already resolved by an earlier request in this browser session."
+    },
+    {
+      "run": 2,
+      "at": "2026-11-19T04:24:45.303Z",
+      "status": 200,
+      "protocol": "h3",
+      "redirects": 0,
+      "dnsMs": 0,
+      "connectMs": 0,
+      "tlsMs": 0,
+      "ttfbMs": 97.6,
+      "requestToFirstByteMs": 89.9,
+      "downloadMs": 2.7,
+      "domContentLoadedMs": 184,
+      "loadMs": 371.1,
+      "transferBytes": 115736
+    },
+    {
+      "run": 3,
+      "at": "2026-11-19T04:24:49.862Z",
+      "status": 200,
+      "protocol": "h3",
+      "redirects": 0,
+      "dnsMs": 0,
+      "connectMs": 0,
+      "tlsMs": 0,
+      "ttfbMs": 89.9,
+      "requestToFirstByteMs": 80.7,
+      "downloadMs": 5.2,
+      "domContentLoadedMs": 177.1,
+      "loadMs": 288.8,
+      "transferBytes": 115735
+    },
+    {
+      "run": 4,
+      "at": "2026-11-19T04:24:54.094Z",
+      "status": 200,
+      "protocol": "h3",
+      "redirects": 0,
+      "dnsMs": 0,
+      "connectMs": 0,
+      "tlsMs": 0,
+      "ttfbMs": 101.9,
+      "requestToFirstByteMs": 92.2,
+      "downloadMs": 3.2,
+      "domContentLoadedMs": 176.2,
+      "loadMs": 271.9,
+      "transferBytes": 115735
+    },
+    {
+      "run": 5,
+      "at": "2026-11-19T04:24:58.640Z",
+      "status": 200,
+      "protocol": "h3",
+      "redirects": 0,
+      "dnsMs": 0,
+      "connectMs": 0,
+      "tlsMs": 0,
+      "ttfbMs": 103.2,
+      "requestToFirstByteMs": 94.2,
+      "downloadMs": 3.4,
+      "domContentLoadedMs": 193.8,
+      "loadMs": 300.3,
+      "transferBytes": 115735
+    }
+  ],
+  "firstLoadResources": {
+    "count": 47,
+    "transferBytes": 952282
+  },
+  "responseHeaders": {
+    "server": "hcdn",
+    "cache-control": "no-store, no-cache, must-revalidate",
+    "content-encoding": "br",
+    "x-powered-by": "PHP/8.3.36",
+    "timing-allow-origin": null,
+    "access-control-allow-origin": null
+  },
+  "crossOriginProbe": {
+    "method": "fetch(url, {mode: 'no-cors', cache: 'no-store'}) from https://harikabehara247.github.io, timed with performance.now() and Resource Timing",
+    "at": "2026-11-19T04:23Z (approx.)",
+    "durationsMs": [
+      279,
+      98,
+      87
+    ],
+    "note": "Opaque responses: no status code or timing breakdown is visible cross-origin because the site sends no Timing-Allow-Origin header."
+  },
+  "pageSpeedInsights": {
+    "attemptedAt": "2026-11-19T04:23Z (approx.)",
+    "result": "HTTP 429: shared keyless daily quota exceeded. No PSI data collected."
+  },
+  "session2": {
+    "note": "Second session, same device and browser pane, pane visible (document.hidden false). Paint and LCP entries were not emitted by the embedded pane, so FCP/LCP are still not recorded.",
+    "probeFromGithubIo": {
+      "at": "2026-11-19T04:41:09.799Z",
+      "origin": "https://harikabehara247.github.io",
+      "method": "fetch no-cors, cache no-store, credentials omit, no referrer; 5 sequential",
+      "samplesMs": [
+        189.2,
+        105,
+        88.6,
+        88.5,
+        82.3
+      ],
+      "timingAllowOrigin": false
+    },
+    "navigations": [
+      {
+        "run": 6,
+        "at": "2026-11-19T04:41:25Z",
+        "status": 200,
+        "protocol": "h3",
+        "ttfbMs": 171,
+        "connectMs": 67,
+        "domContentLoadedMs": 571,
+        "loadMs": 1240,
+        "resources": 45,
+        "cls": 0
+      },
+      {
+        "run": 7,
+        "at": "2026-11-19T04:41:33Z",
+        "status": 200,
+        "protocol": "h3",
+        "ttfbMs": 118,
+        "requestToFirstByteMs": 112,
+        "connectMs": 0,
+        "domContentLoadedMs": 205,
+        "loadMs": 373,
+        "transferBytes": 115722
+      }
+    ],
+    "pageSpeedInsights": {
+      "at": "2026-11-19T04:41:02Z",
+      "status": 429,
+      "message": "Quota exceeded for quota metric 'Queries' and limit 'Queries per day' (shared keyless quota)"
+    },
+    "environment": {
+      "userAgent": "Chrome/156.0.8078.75 (Claude desktop browser pane), Windows 10 x64",
+      "networkInformation": {
+        "effectiveType": "4g",
+        "rttMs": 50,
+        "downlinkMbps": 10
+      }
+    }
+  }
+}

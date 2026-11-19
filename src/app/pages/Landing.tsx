@@ -5,27 +5,27 @@ import { ButtonLink, Card, Logo, useDocumentTitle } from '../ui';
 
 const ENTRY = [
   {
-    title: 'Explore a demo',
+    title: 'Check website URL',
+    body: 'Measure a public site or API from outside: HTTP status, redirects, server response time and page-load metrics, with the method shown next to every number.',
+    to: '/analyze/url',
+    cta: 'Check a URL',
+  },
+  {
+    title: 'Upload trace',
+    body: 'Drop in an OpenTelemetry OTLP JSON or TraceDetective JSON trace and see which operation took the time. It is analysed entirely in your browser.',
+    to: '/analyze/upload',
+    cta: 'Import a trace',
+  },
+  {
+    title: 'Explore demo',
     body: 'Open one of four synthetic traces: a healthy request, a slow database query, a slow external dependency and a failing dependency.',
     to: '/examples',
     cta: 'Browse examples',
   },
-  {
-    title: 'Import a trace',
-    body: 'Drop in a JSON trace file or paste JSON. It is validated and analysed entirely in your browser.',
-    to: '/analyze/upload',
-    cta: 'Import trace',
-  },
-  {
-    title: 'Compare two requests',
-    body: 'Put a healthy trace next to a slow one and see which operations changed, which appeared and which started failing.',
-    to: `/compare?baseline=${sampleTraceId('healthy-order')}&current=${sampleTraceId('slow-database')}`,
-    cta: 'Compare samples',
-  },
 ];
 
 const STEPS = [
-  ['Load', 'Pick a sample or import a trace in the documented JSON format.'],
+  ['Load', 'Check a URL, import a trace (OTLP JSON or TraceDetective JSON), or pick a sample.'],
   ['See', 'A nested waterfall and span tree show where the request spent its time, with the critical path highlighted.'],
   ['Investigate', 'Rule-based insights point at dominant spans, errors and unexplained time, with evidence and what to check next.'],
   ['Share', 'Export a JSON report with provenance, or print a clean report to PDF.'],
@@ -35,9 +35,9 @@ const FEATURES = [
   ['Correct timing', 'Self time uses the union of child intervals, so concurrent work is never double-counted.'],
   ['Critical path', 'Follows what the request was actually waiting on, from the last span to finish back to the start.'],
   ['Evidence, not guesses', 'Every insight lists the spans and numbers behind it, alternatives to consider and a caveat.'],
-  ['Regression compare', 'Matches spans by their position in the tree and reports deltas, added and removed spans and new errors.'],
   ['Keyboard and screen reader friendly', 'The timeline is a navigable tree, with status shown by text as well as colour.'],
-  ['No account, no tracking', 'Static site. No login, no ads, and no analytics that collect trace content.'],
+  ['Compare two requests', 'Put a healthy trace next to a slow one and see what changed, appeared or started failing.'],
+  ['No account, no tracking', 'Static site. No login, no ads, no analytics and no cookies.'],
 ];
 
 export function Landing() {
@@ -54,14 +54,14 @@ export function Landing() {
             Fix it faster.
           </h1>
           <p className="mt-4 max-w-xl text-lg text-muted">
-            {SITE.name} is a free, open-source tool for investigating slow API requests. Load a trace and see where the time went, what the request
-            was waiting on, and what to check next.
+            {SITE.name} is a free, open-source tool for investigating slow websites and API requests. Check a public URL from outside, or load a
+            trace and see where the time went, what the request was waiting on, and what to check next.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <ButtonLink to={`/trace/${sampleTraceId('slow-database')}`} variant="primary">
-              Try the demo
+            <ButtonLink to="/analyze" variant="primary">
+              Start analysis
             </ButtonLink>
-            <ButtonLink to="/analyze/upload">Analyze a trace</ButtonLink>
+            <ButtonLink to={`/trace/${sampleTraceId('slow-database')}`}>Try the demo</ButtonLink>
             {SITE.repoUrl && (
               <a href={SITE.repoUrl} className="inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold text-muted no-underline hover:bg-surface-2 hover:text-ink hover:no-underline">
                 View on GitHub
@@ -119,7 +119,7 @@ export function Landing() {
           <h2 id="privacy-h" className="text-xl font-bold">Privacy first</h2>
           <p className="mt-2 text-sm text-muted">
             Traces are parsed and analysed in your browser and are never sent to a server. Sensitive-looking attributes such as tokens and passwords are
-            redacted on import. Remove secrets and personal data from traces before importing them anyway. <Link to="/docs#privacy">Privacy details</Link>
+            redacted on import. The URL check contacts Google only if you choose PageSpeed Insights. <Link to="/docs#privacy">Privacy details</Link>
           </p>
         </Card>
         <Card>

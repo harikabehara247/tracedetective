@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AttributeValue, Span, TraceDocument, ValidationIssue } from './types';
+import { convertOtlp, looksLikeOtlp, unwrapOtlp } from './otlp';
 
 export const LIMITS = {
   maxFileBytes: 2 * 1024 * 1024,
@@ -8,6 +9,9 @@ export const LIMITS = {
   maxAttributeValueLength: 1024,
   maxAttributes: 64,
 } as const;
+
+/** Traces longer than this almost always mean mixed time units. */
+const MAX_PLAUSIBLE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /** Attribute keys whose values are replaced before anything is rendered or exported. */
 const SENSITIVE_KEY = /pass(word)?|secret|token|authorization|cookie|api[-_.]?key|session|credential|private[-_.]?key/i;
@@ -142,6 +146,14 @@ export function checkStructure(doc: TraceDocument): { errors: ValidationIssue[];
         message: `The trace has ${roots.length} root spans; they are shown side by side and the critical path covers the whole trace window.`,
       });
     }
+    const start = Math.min(...doc.spans.map((s) => s.startTimeMs));
+    const end = Math.max(...doc.spans.map((s) => s.startTimeMs + s.durationMs));
+    if (end - start > MAX_PLAUSIBLE_WINDOW_MS) {
+      warnings.push({
+        code: 'implausible_window',
+        message: `The trace spans ${((end - start) / 3_600_000).toFixed(1)} hours. Check that every timestamp uses milliseconds; mixed units (seconds, microseconds, nanoseconds) produce windows like this.`,
+      });
+    }
     for (const span of doc.spans) {
       const parent = span.parentSpanId ? byId.get(span.parentSpanId) : undefined;
       if (!parent) continue;
@@ -203,6 +215,25 @@ export function validateTrace(input: unknown): ParseResult {
   return { ok: true, trace: doc, warnings };
 }
 
+/** OpenTelemetry Collector file exporter output: one OTLP JSON request per line. Merged into one request. */
+function parseOtlpJsonLines(text: string): unknown | undefined {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
+  if (lines.length < 2) return undefined;
+  const resourceSpans: unknown[] = [];
+  for (const line of lines) {
+    let v: unknown;
+    try {
+      v = JSON.parse(line);
+    } catch {
+      return undefined;
+    }
+    const rs = unwrapOtlp(v);
+    if (!rs) return undefined;
+    resourceSpans.push(...rs);
+  }
+  return { resourceSpans };
+}
+
 /** Parse raw text (e.g. an uploaded file). Never evaluates the content. */
 export function parseTraceText(text: string, byteLength = new TextEncoder().encode(text).length): ParseResult {
   if (byteLength > LIMITS.maxFileBytes) {
@@ -218,18 +249,15 @@ export function parseTraceText(text: string, byteLength = new TextEncoder().enco
   try {
     json = JSON.parse(text);
   } catch (e) {
-    return { ok: false, errors: [{ code: 'invalid_json', message: `Not valid JSON: ${(e as Error).message}` }] };
+    const lines = parseOtlpJsonLines(text);
+    if (!lines) return { ok: false, errors: [{ code: 'invalid_json', message: `Not valid JSON: ${(e as Error).message}` }] };
+    json = lines;
   }
-  if (json && typeof json === 'object' && 'resourceSpans' in json) {
-    return {
-      ok: false,
-      errors: [
-        {
-          code: 'unsupported_format',
-          message: 'This looks like OpenTelemetry OTLP JSON. OTLP import is planned but not supported yet; convert it to the TraceDetective schema (see Docs).',
-        },
-      ],
-    };
+  if (looksLikeOtlp(json)) {
+    const converted = convertOtlp(json);
+    if (!converted.ok) return converted;
+    const result = validateTrace(converted.document);
+    return result.ok ? { ...result, warnings: [...converted.warnings, ...result.warnings] } : result;
   }
   return validateTrace(json);
 }

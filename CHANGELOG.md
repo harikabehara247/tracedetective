@@ -4,6 +4,26 @@ All notable changes are listed here. The format follows Keep a Changelog, and ve
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-19
+
+### Added
+- Start analysis page with three modes (Check website URL, Upload trace, Explore demo), each listing what it can and cannot do.
+- Working URL check: input validation and normalisation, private/local address refusal, Google PageSpeed Insights (lab and field data, optional API key, 90 s timeout, clear quota/timeout/network errors), a 5-request browser probe, evidence-backed findings, methodology, and JSON export.
+- Native OpenTelemetry import: OTLP/JSON (hex or base64 IDs, nanosecond times, int or string enums, legacy key), Collector file exporter JSON Lines, Grafana Tempo v1/v2 responses.
+- First-visit guided walkthrough, reopenable from Start analysis and the footer.
+- Warning for traces longer than 24 hours (mixed time units).
+- Content Security Policy in production builds; `_headers` for hosts that support headers.
+- Browser tests for every route (direct load and refresh), console errors, failed assets, onboarding, the URL check (mocked), keyboard skip link and mobile menu. Can run against a live URL, in Firefox and WebKit too, and on a GitHub Pages simulation.
+- Live-site workflow that runs after each Pages deploy and daily.
+
+### Changed
+- GitHub Pages deep links and refreshes now return HTTP 200 (per-route `index.html`), instead of 404.
+- Pages deploys on every push to `main`.
+- "Expand all" and "Collapse all" show only when they do something; the paste button is always enabled and explains an empty paste.
+- The skip link is the first Tab stop on page load.
+- The instrumentation guide replaces the conversion script with export options, now that OTLP is imported directly.
+
+
 ## [0.1.0] - unreleased
 
 ### Added

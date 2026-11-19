@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { SITE } from './config';
 import { Logo } from './ui';
+import { Tour, openTour } from './components/Tour';
 
 const NAV = [
   { to: '/', label: 'Home', end: true },
-  { to: '/analyze', label: 'Analyze' },
+  { to: '/analyze', label: 'Start analysis' },
   { to: '/examples', label: 'Examples' },
   { to: '/compare', label: 'Compare' },
   { to: '/reports', label: 'Reports' },
@@ -44,8 +45,15 @@ export function Layout() {
   const toggleRef = useRef<HTMLButtonElement>(null);
 
   // Move focus to the main region on route change for screen-reader and keyboard users.
+  // Not on the first load, so the skip link stays the first Tab stop.
+  const firstLoad = useRef(true);
   useEffect(() => {
     setOpen(false);
+    if (firstLoad.current && !location.hash) {
+      firstLoad.current = false;
+      return;
+    }
+    firstLoad.current = false;
     const target = location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
     if (target) {
       target.scrollIntoView();
@@ -133,6 +141,7 @@ export function Layout() {
               {SITE.name} · Created and maintained by {SITE.creator} · {SITE.license} licensed
             </p>
             <p className="flex gap-4">
+              <button type="button" className="text-cyan underline-offset-2 hover:underline" onClick={openTour}>Take the tour</button>
               <Link to="/docs#privacy">Privacy</Link>
               <Link to="/docs#limitations">Limitations</Link>
               {SITE.repoUrl && <a href={SITE.repoUrl}>GitHub</a>}
@@ -140,6 +149,7 @@ export function Layout() {
           </div>
         </footer>
       </div>
+      <Tour />
     </div>
   );
 }

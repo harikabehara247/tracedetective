@@ -158,7 +158,6 @@ export function Waterfall({ analysis, selectedId, onSelect, collapsed, onToggle,
                 aria-level={node.depth + 1}
                 aria-selected={selected}
                 aria-expanded={hasKids ? !isCollapsed : undefined}
-                aria-label={`${node.span.service} ${node.span.name}, ${formatMs(node.span.durationMs)}, starts at ${formatMs(node.startMs)}${isError ? ', error' : ''}${node.criticalMs > 0 ? `, ${formatMs(node.criticalMs)} on critical path` : ''}`}
                 tabIndex={id === tabbableId ? 0 : -1}
                 onClick={() => onSelect(id)}
                 onKeyDown={(e) => {
@@ -193,8 +192,8 @@ export function Waterfall({ analysis, selectedId, onSelect, collapsed, onToggle,
                     <span className="text-muted">{node.span.service}</span> <span className="font-medium">{node.span.name}</span>
                   </span>
                   {isError && (
-                    <span className="ml-1 shrink-0 rounded border border-danger/60 px-1 text-[10px] font-bold text-danger" aria-hidden="true">
-                      ERR
+                    <span className="ml-1 shrink-0 rounded border border-danger/60 px-1 text-[10px] font-bold text-danger">
+                      ERR<span className="sr-only">OR</span>
                     </span>
                   )}
                 </div>
@@ -222,6 +221,10 @@ export function Waterfall({ analysis, selectedId, onSelect, collapsed, onToggle,
                     }
                   >
                     {formatMs(node.span.durationMs)}
+                  </span>
+                  <span className="sr-only">
+                    , starts at {formatMs(node.startMs)}
+                    {node.criticalMs > 0 ? `, ${formatMs(node.criticalMs)} on critical path` : ''}
                   </span>
                 </div>
               </div>
