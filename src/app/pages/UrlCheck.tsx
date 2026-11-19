@@ -396,7 +396,7 @@ function Results({ run, elapsed, running, headingRef }: { run: Run; elapsed: num
           <li>
             <strong className="text-ink">Browser probe</strong>: {PROBE_COUNT} sequential <code>GET</code> requests from this browser with <code>mode: no-cors</code>, no cookies,
             no referrer and caching disabled. Each time is from sending the request until the response finishes, measured with <code>performance.now()</code>. Times include your
-            network, Wi-Fi and location. The response is opaque, so status codes and redirects cannot be read.
+            network, Wi-Fi and location. The response is opaque, so status codes and redirects cannot be read. DNS, TCP and TLS times are shown only when the site sends a <code>Timing-Allow-Origin</code> header.
           </li>
           <li>Thresholds: server response 600 ms (Lighthouse), LCP 2.5 s, CLS 0.1 and TBT 200 ms (Core Web Vitals “good”), page weight 1.6 MB.</li>
           <li>One run is one sample. Repeat at different times before drawing conclusions, and confirm causes with server-side logs or traces.</li>

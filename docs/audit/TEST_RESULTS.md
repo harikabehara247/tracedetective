@@ -52,3 +52,20 @@ Earlier in this project (before this audit) all pages, sample scenarios, import,
 `onboarding.spec.ts`: walkthrough opens once and leads to a mode; Escape skips; Start analysis modes; all four demo traces.
 `url-check.spec.ts` (PSI and target mocked): full run with findings, methodology and export; 429 explanation with probe still working; unreachable target; private addresses refused with no outside request.
 `a11y.spec.ts`: axe-core on 12 pages.
+
+## Live run after the 0.2.0 deploy (GitHub Actions, `live-smoke.yml`)
+
+Run against https://harikabehara247.github.io/tracedetective/ after PR #1 (merge commit `41a1784`). Projects: desktop, tablet, Pixel 7 (Chromium), Firefox, WebKit, iPhone 14 (WebKit).
+
+**Result: failed.** 9 tests failed and 3 were skipped (the mobile menu test on the desktop-sized projects). Everything else passed, including the first-visit walkthrough tests in all six projects. Failures and fixes: see FIX_LOG "0.2.1".
+
+## 0.2.1 local re-run (19 Nov 2026)
+
+| Suite | Result |
+| --- | --- |
+| Type check | Pass |
+| Vitest | 108 passed |
+| Playwright, Chromium desktop/tablet/Pixel 7, production-like build with repository link | 62 passed, 1 skipped |
+| GitHub Pages simulation at `/tracedetective/` | 62 passed, 1 skipped |
+
+Firefox and WebKit fixes (L3–L5) can only be confirmed by the next live run.

@@ -33,7 +33,10 @@ test('runs both methods and shows evidence-backed findings, methodology and expo
   await expect(page.getByText('5 of 5')).toBeVisible();
   await expect(page.getByText(/Not visible to the browser/)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Methodology' })).toBeVisible();
-  await expect(page.getByText(/Timing-Allow-Origin/).first()).toBeVisible();
+  // Engines differ in whether mocked responses expose a timing breakdown, so accept either
+  // the breakdown or the explanation, but require the section and the methodology note.
+  await expect(page.getByRole('heading', { name: 'Connection timing (DNS, TCP, TLS)' })).toBeVisible();
+  await expect(page.getByText(/shown only when the site sends a/)).toBeVisible();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export JSON' }).click();
   const file = await download;

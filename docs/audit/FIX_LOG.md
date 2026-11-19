@@ -70,3 +70,17 @@ Verified by `e2e/a11y.spec.ts` on 12 pages × 3 viewports, and `smoke.spec.ts` s
 - URL results said "— in 1 requests" when PSI returned no byte weight; now "—", with correct plural.
 - Landing and README copy describe the URL check and OTLP import.
 - Version 0.2.0 in `package.json` and report provenance; CHANGELOG entry.
+
+## 0.2.1: failures from the first live run
+
+The `live-smoke.yml` run after the 0.2.0 deploy (Chromium desktop, tablet and Pixel 7, Firefox, WebKit, iPhone 14) failed 9 tests. Each was reproduced locally where the engine allowed it, fixed, and re-tested.
+
+| # | Failure in the live run | Cause | Change | Reproduced here |
+| --- | --- | --- | --- | --- |
+| L1 | About page overflowed by 39 px (Pixel 7) and 60 px (iPhone 14) | The repository URL is only shown when `VITE_REPO_URL` is set, which the Pages build does and local test builds did not. The unbreakable URL widened a grid column. | `minmax(0,1fr)` column and `break-all` on the link. Local test builds now set `VITE_REPO_URL`. | Yes: 13 px overflow on Pixel 7 before the fix, 0 after |
+| L2 | Firefox: CSP violation "blocked a JavaScript eval" | Zod 4 probes `new Function("")` to decide whether to JIT-compile validators. The probe is caught, but Firefox still reports the violation. | `z.config({ jitless: true })` in `src/core/schema.ts`. | Yes: a new `securitypolicyviolation` check in the route test failed in Chromium before the fix and passes after |
+| L3 | Firefox: refresh returned 304 | The browser revalidated from its HTTP cache. 304 is a success; the test was too strict. | Test accepts 200 or 304 on refresh (first load must still be 200). | Not reproducible in Chromium |
+| L4 | Firefox, WebKit, iPhone: two headings matched "SELECT inventory" | Playwright's substring name match also hit the insight heading. Chromium passed only because of timing. | Exact name match in the test. | Test-only |
+| L5 | WebKit, iPhone: Timing-Allow-Origin explanation not found | With mocked responses WebKit exposes a timing breakdown, so the "Not available" text is replaced by the numbers. The app behaved as designed; the test assumed one outcome. | Test accepts either outcome and checks the section heading; the methodology now always states when connection timing is shown. | Not reproducible in Chromium |
+
+Manual checks reported after the 0.2.0 deploy: Start analysis showed three options; the tour opened and Escape closed it; the browser probe succeeded 5/5 on example.com; PageSpeed showed the shared-quota message; `/compare` redirected to `/compare/` and returned 200. The tour did not auto-open in the tester's browser because that profile had already dismissed it. The live first-visit tests, which use a clean browser context, passed in all six projects.

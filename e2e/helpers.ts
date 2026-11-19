@@ -5,6 +5,12 @@ export const test = base.extend<{ skipTour: boolean }>({
   skipTour: [true, { option: true }],
   page: async ({ page, skipTour }, use) => {
     if (skipTour) await page.addInitScript(() => window.localStorage.setItem('td:tour-done', '1'));
+    // Record Content Security Policy violations; browsers do not all log them to the console.
+    await page.addInitScript(() => {
+      const w = window as unknown as { __cspViolations: string[] };
+      w.__cspViolations = [];
+      document.addEventListener('securitypolicyviolation', (e) => w.__cspViolations.push(`${e.violatedDirective} ${e.blockedURI}`));
+    });
     await use(page);
   },
 });
@@ -54,3 +60,7 @@ export const ROUTES = [
   'docs',
   'about',
 ];
+
+export async function cspViolations(page: Page): Promise<string[]> {
+  return page.evaluate(() => (window as unknown as { __cspViolations?: string[] }).__cspViolations ?? []);
+}

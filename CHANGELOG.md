@@ -4,6 +4,21 @@ All notable changes are listed here. The format follows Keep a Changelog, and ve
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-19
+
+Fixes for failures found by the first post-deploy live run of 0.2.0.
+
+### Fixed
+- About page overflowed horizontally on phones when the repository link is shown (production builds only).
+- Zod's optional JIT probe (`new Function`) triggered a Content Security Policy violation, reported by Firefox. Validation now runs in jitless mode.
+- Browser tests: accept HTTP 304 on refresh, use exact heading names, and accept either a timing breakdown or its explanation in the URL check.
+
+### Added
+- Browser tests fail on any Content Security Policy violation event, in every engine.
+- Local browser tests build with the repository link set, like the Pages build.
+- The URL check methodology states when DNS/TCP/TLS times are shown.
+
+
 ## [0.2.0] - 2026-11-19
 
 ### Added
