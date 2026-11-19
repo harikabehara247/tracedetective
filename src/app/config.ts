@@ -5,4 +5,6 @@ export const SITE = {
   creator: 'Harika Behara',
   repoUrl: (import.meta.env.VITE_REPO_URL as string | undefined) ?? '',
   license: 'MIT',
+  /** TraceDetective PageSpeed proxy (holds the Google API key server-side). Empty: call Google's keyless API directly. */
+  psiProxyUrl: ((import.meta.env.VITE_PSI_PROXY_URL as string | undefined) ?? '').trim(),
 } as const;

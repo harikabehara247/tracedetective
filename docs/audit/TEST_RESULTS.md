@@ -69,3 +69,16 @@ Run against https://harikabehara247.github.io/tracedetective/ after PR #1 (merge
 | GitHub Pages simulation at `/tracedetective/` | 62 passed, 1 skipped |
 
 Firefox and WebKit fixes (L3–L5) can only be confirmed by the next live run.
+
+## 0.3.0 local run (19 Nov 2026)
+
+| Suite | Result |
+| --- | --- |
+| Type check | Pass |
+| Vitest | 143 passed (adds `worker.test.ts` 18, `pagespeed.test.ts` 11, website analysis UI 7) |
+| Pages build | `spa-fallback: 404.html plus 14 route pages` |
+| Playwright, Chromium desktop/tablet/Pixel 7, keyless build | 68 passed, 4 skipped (mobile-menu test on wide viewports; unmocked real analysis, which runs only with `REAL_PSI=1`) |
+| Playwright on GitHub Pages simulation at `/tracedetective/`, build with an analysis-service URL | 68 passed, 4 skipped |
+| `wrangler deploy --dry-run` (4.165.0) | Bundles (13.6 KiB); rate-limit bindings and variables recognised |
+
+Not yet run: the Worker deployed on Cloudflare with a real key, the real analysis in the live workflow, and Firefox/WebKit. These run in "Deploy analysis service" and "Live site checks" after merge.

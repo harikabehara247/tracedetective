@@ -6,7 +6,7 @@ import { PageHeader, useDocumentTitle } from '../ui';
 
 const SECTIONS = [
   ['quick-start', 'Quick start'],
-  ['url-check', 'URL check'],
+  ['url-check', 'Website analysis'],
   ['otlp', 'OpenTelemetry import'],
   ['schema', 'JSON schema'],
   ['timing', 'How timing is calculated'],
@@ -82,23 +82,35 @@ export function Docs() {
           <p>To run it yourself: <code>npm install</code>, then <code>npm run dev</code>. <code>npm test</code> runs the test suite and <code>npm run build</code> produces a static site in <code>dist/</code>.</p>
         </Section>
 
-        <Section id="url-check" title="URL check">
+        <Section id="url-check" title="Website analysis">
           <p>
-            The <Link to="/analyze/url">URL check</Link> measures a public website or API endpoint from outside. {SITE.name} has no server, so it never fetches
-            URLs itself. Two methods are available, and you choose which run:
+            <Link to="/analyze/url">Website analysis</Link> measures a public website from outside. Enter the address and choose Analyze Website. There is no
+            account, registration or API key.
           </p>
           <ul>
             <li>
-              <strong>Google PageSpeed Insights (API v5).</strong> Google’s servers load the page with Lighthouse and return HTTP status, final URL, redirects,
-              server response time, FCP, LCP, TBT, CLS, page weight and, when Google has enough traffic data, real-user Chrome UX Report metrics. This sends the
-              URL to Google. The shared keyless quota is often exhausted, so you can paste your own free API key; it is used only for that request and is not saved.
+              <strong>Lab test (Lighthouse).</strong> Google PageSpeed Insights loads the page once in Google’s test environment, as a mid-range phone on slow 4G by
+              default or as a desktop (Advanced options). It returns HTTP status, final URL, redirects, server response time, FCP, LCP, TBT, CLS, Speed Index and
+              page weight. This is a simulated, single measurement, useful for finding causes and comparing changes.
             </li>
             <li>
-              <strong>Browser probe.</strong> Your browser sends 5 sequential <code>GET</code> requests with <code>no-cors</code>, no cookies, no referrer and no cache,
-              and times each one. The response is opaque, so status codes and redirects are not visible. DNS, TCP and TLS timing are only shown when the server
-              sends <code>Timing-Allow-Origin</code>. <code>http://</code> URLs cannot be probed from this https page.
+              <strong>Real users (Chrome UX Report).</strong> When Google has enough Chrome traffic for the page or site, the same response includes what real
+              Chrome users experienced over the last 28 days, at the 75th percentile. It is shown separately and is missing for low-traffic sites.
+            </li>
+            <li>
+              <strong>Browser probe (optional).</strong> Under Advanced options you can also time the address from your own browser: 5 sequential{' '}
+              <code>GET</code> requests with <code>no-cors</code>, no cookies, no referrer and no cache. Browsers keep other sites’ responses private (CORS), so
+              status codes and redirects are not visible, and DNS, TCP and TLS timing are only shown when the server sends <code>Timing-Allow-Origin</code>.{' '}
+              <code>http://</code> URLs cannot be probed from this https page.
             </li>
           </ul>
+          <p>
+            {SITE.psiProxyUrl
+              ? 'Requests go through the TraceDetective analysis service, which adds the project’s own Google API key on the server, limits how often each visitor and the whole site can run tests, and keeps a result for 15 minutes so repeated tests of the same page do not use more quota.'
+              : 'This copy of the site calls Google’s public PageSpeed Insights endpoint directly, without a key. That endpoint has a small shared quota, so tests can fail with a quota message at busy times.'}{' '}
+            When a test fails, the page says why (quota used up, too many tests, timeout, page could not be loaded) and offers to try again, open the same test on
+            the PageSpeed Insights website, or run the browser probe. It never shows empty or made-up numbers.
+          </p>
           <p>
             Input is normalised (https:// is added, fragments are removed) and refused when it has credentials, a secret-looking query parameter, or a local,
             private-network, link-local or internal host. Findings appear only when a measured value crosses a published threshold: server response over 600 ms,
@@ -193,7 +205,7 @@ export function Docs() {
             <li>Insights only see what is instrumented. Uninstrumented code, queues or services can be the true cause.</li>
             <li>OTLP protobuf (binary) files are not supported; export OTLP JSON instead. Partial traces with missing parents are rejected.</li>
             <li>There is no live monitoring, alerting or trace storage.</li>
-            <li>The URL check reports only what is visible from outside. It cannot check pages behind a login, local or private addresses, and it cannot explain server-internal causes. PageSpeed Insights results come from Google’s locations and test devices, not your users’.</li>
+            <li>Website analysis reports only what is visible from outside. It cannot check pages behind a login, local or private addresses, and it cannot explain server-internal causes. PageSpeed Insights results come from Google’s locations and test devices, not your users’.</li>
             <li>The four built-in examples are synthetic. They are not benchmarks or measurements.</li>
           </ul>
         </Section>
@@ -203,8 +215,8 @@ export function Docs() {
             <li>Traces are parsed and analysed in your browser. They are never sent to a server.</li>
             <li>Imported traces are kept in this browser tab’s session storage so a reload does not lose them. Closing the tab clears them, and you can remove them sooner on the Upload tab.</li>
             <li>Attribute values whose keys look sensitive (password, secret, token, authorization, cookie, API key, session, credential) are replaced with “[redacted]” on import.</li>
-            <li>The URL check sends the URL you enter to Google only when PageSpeed Insights is selected (Google’s privacy policy applies to that request). The browser probe sends requests from your browser to the URL you enter, without cookies or a referrer.</li>
-            <li>Your PageSpeed API key, if you enter one, stays in memory for that page and is never stored.</li>
+            <li>Website analysis sends the address you enter to Google PageSpeed Insights (Google’s privacy policy applies){SITE.psiProxyUrl ? ', through the TraceDetective analysis service. The service uses your IP address only to count tests per minute, keeps each result for 15 minutes so repeat tests are fast, and writes no request logs' : ''}. You never enter an API key.</li>
+            <li>The optional browser probe sends requests from your browser to the address you enter, without cookies or a referrer.</li>
             <li>The only thing stored on your device besides imported traces is a flag that you have seen the walkthrough (local storage).</li>
             <li>The site has no login, no ads, no cookies and no analytics.</li>
             <li>Still, remove secrets and personal data from traces before importing or sharing reports.</li>
@@ -215,7 +227,7 @@ export function Docs() {
           <ul>
             <li>Imported data is never executed. All values are rendered as text, never as HTML.</li>
             <li>File size, span count, string length and attribute count are limited to keep the browser responsive.</li>
-            <li>The app makes no network requests with trace data, and there is no server-side component, so there is nothing that can be made to fetch internal addresses (no SSRF surface). The URL check still refuses local and private targets before anything runs.</li>
+            <li>The app makes no network requests with trace data. The only server-side part is the optional analysis service, which forwards a validated public address to Google and never fetches the address itself. Local and private targets are refused in the browser and again on the service.</li>
             <li>A Content Security Policy allows scripts and styles only from the site itself; connections are limited to https.</li>
             <li>Report vulnerabilities privately as described in SECURITY.md in the repository.</li>
           </ul>

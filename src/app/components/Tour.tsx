@@ -38,7 +38,7 @@ const STEPS = [
   {
     title: 'Three ways to start',
     body: [
-      'Check website URL: measures a public URL from outside, with HTTP status, redirects, server response time and page-load metrics. It cannot see database or code timing.',
+      'Analyze website: enter a public address, no account or API key needed. Measures it from outside, with HTTP status, redirects, server response time and page-load metrics. It cannot see database or code timing.',
       'Upload trace: import an OpenTelemetry (OTLP JSON) or TraceDetective JSON trace to see exactly which operation took the time.',
       'Explore demo: four synthetic traces that show common problems. They are clearly labelled as synthetic.',
     ],
@@ -62,7 +62,7 @@ const STEPS = [
     title: 'Your data stays with you',
     body: [
       'Trace files are parsed in this tab and never uploaded. Sensitive-looking attributes are redacted on import.',
-      'The URL check is the only feature that contacts another service, and only if you choose PageSpeed Insights, which sends the URL to Google.',
+      'Website analysis is the only feature that contacts another service: the address you enter is sent to Google PageSpeed Insights. No account or API key is needed.',
     ],
   },
 ] as const;
@@ -176,7 +176,7 @@ export function Tour() {
             {step > 0 && <Button onClick={() => setStep(step - 1)}>Back</Button>}
             {lastStep ? (
               <>
-                <Button onClick={() => go('/analyze/url')}>Check a URL</Button>
+                <Button onClick={() => go('/analyze/url')}>Analyze a website</Button>
                 <Button variant="primary" onClick={() => go(`/trace/${sampleTraceId('slow-database')}`)}>
                   Open the demo
                 </Button>

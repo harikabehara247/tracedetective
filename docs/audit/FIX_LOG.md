@@ -84,3 +84,17 @@ The `live-smoke.yml` run after the 0.2.0 deploy (Chromium desktop, tablet and Pi
 | L5 | WebKit, iPhone: Timing-Allow-Origin explanation not found | With mocked responses WebKit exposes a timing breakdown, so the "Not available" text is replaced by the numbers. The app behaved as designed; the test assumed one outcome. | Test accepts either outcome and checks the section heading; the methodology now always states when connection timing is shown. | Not reproducible in Chromium |
 
 Manual checks reported after the 0.2.0 deploy: Start analysis showed three options; the tour opened and Escape closed it; the browser probe succeeded 5/5 on example.com; PageSpeed showed the shared-quota message; `/compare` redirected to `/compare/` and returned 200. The tour did not auto-open in the tester's browser because that profile had already dismissed it. The live first-visit tests, which use a clean browser context, passed in all six projects.
+
+# 0.3.0: website analysis without API keys
+
+### K1. Visitors had to bring their own PageSpeed API key
+- **Problem:** Google's keyless PageSpeed endpoint shares a small quota, so tests often failed with "quota exceeded" and the page asked visitors to create and paste an API key.
+- **Change:** the key field is removed. A Cloudflare Worker (`worker/`) adds the project's key on the server, with origin check, URL validation, per-client and global rate limits, 15-minute caching, an 80 s timeout and key scrubbing. The app uses it when built with `VITE_PSI_PROXY_URL`, and otherwise calls Google's keyless endpoint directly.
+- **Files:** `worker/src/handler.ts`, `worker/src/index.ts`, `worker/wrangler.toml`, `worker/README.md`, `src/core/pagespeed.ts`, `src/app/config.ts`, `.github/workflows/deploy-proxy.yml`, `.github/workflows/pages.yml`
+- **Verified by:** `tests/worker.test.ts` (18), `tests/pagespeed.test.ts` (11), `wrangler deploy --dry-run`, and an earlier local `wrangler dev` run (health, invalid URL, foreign origin 403, 429 after 6 requests).
+
+### K2. Simple flow, lab vs field, and clear errors
+- **Problem:** the form exposed methods, device and key up front; lab and real-user numbers were mixed in one panel; some failures showed little more than a generic message.
+- **Change:** URL plus **Analyze Website**; device and an opt-in browser probe under Advanced options with a CORS explanation; separate "Lab test" and "Real users" sections with ratings; an error card per failure kind with Try again, Open on PageSpeed Insights and a browser-probe alternative, and no empty results; **Export Report**.
+- **Files:** `src/app/pages/UrlCheck.tsx`, `src/core/url.ts`, `src/app/pages/Analyze.tsx`, `src/app/pages/Docs.tsx`, `src/app/components/Tour.tsx`, `src/app/pages/Landing.tsx`
+- **Verified by:** `tests/ui.test.tsx` website analysis (7), `tests/url.test.ts` (38), `e2e/url-check.spec.ts` (6 × 3 viewports), `e2e/live-psi.spec.ts` (live only).

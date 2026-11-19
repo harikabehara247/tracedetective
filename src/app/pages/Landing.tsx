@@ -5,10 +5,10 @@ import { ButtonLink, Card, Logo, useDocumentTitle } from '../ui';
 
 const ENTRY = [
   {
-    title: 'Check website URL',
+    title: 'Analyze website',
     body: 'Measure a public site or API from outside: HTTP status, redirects, server response time and page-load metrics, with the method shown next to every number.',
     to: '/analyze/url',
-    cta: 'Check a URL',
+    cta: 'Analyze a website',
   },
   {
     title: 'Upload trace',
@@ -25,7 +25,7 @@ const ENTRY = [
 ];
 
 const STEPS = [
-  ['Load', 'Check a URL, import a trace (OTLP JSON or TraceDetective JSON), or pick a sample.'],
+  ['Load', 'Analyze a website, import a trace (OTLP JSON or TraceDetective JSON), or pick a sample.'],
   ['See', 'A nested waterfall and span tree show where the request spent its time, with the critical path highlighted.'],
   ['Investigate', 'Rule-based insights point at dominant spans, errors and unexplained time, with evidence and what to check next.'],
   ['Share', 'Export a JSON report with provenance, or print a clean report to PDF.'],
@@ -119,7 +119,7 @@ export function Landing() {
           <h2 id="privacy-h" className="text-xl font-bold">Privacy first</h2>
           <p className="mt-2 text-sm text-muted">
             Traces are parsed and analysed in your browser and are never sent to a server. Sensitive-looking attributes such as tokens and passwords are
-            redacted on import. The URL check contacts Google only if you choose PageSpeed Insights. <Link to="/docs#privacy">Privacy details</Link>
+            redacted on import. Website analysis sends only the address you enter to Google PageSpeed Insights. <Link to="/docs#privacy">Privacy details</Link>
           </p>
         </Card>
         <Card>

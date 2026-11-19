@@ -1,27 +1,30 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   TOOL,
-  explainPsiError,
   normalizeUrl,
-  parsePsi,
-  psiRequestUrl,
+  rateFieldCategory,
+  rateMetric,
   runBrowserProbe,
+  runPageSpeed,
   urlFindings,
+  type PageSpeedResult,
   type ProbeSample,
   type ProbeSummary,
-  type PsiError,
   type PsiSummary,
+  type RatedMetric,
+  type Rating,
   type Strategy,
   type UrlFinding,
 } from '../../core';
+import { SITE } from '../config';
 import { Button, Card, SeverityBadge, downloadJson } from '../ui';
 
 const PSI_TIMEOUT_MS = 90_000;
 const PROBE_COUNT = 5;
 const PROBE_TIMEOUT_MS = 10_000;
 
-type PsiState = { state: 'off' } | { state: 'running' } | { state: 'ok'; summary: PsiSummary } | { state: 'error'; error: PsiError } | { state: 'cancelled' };
+type PsiState = { state: 'running' } | { state: 'done'; result: PageSpeedResult } | { state: 'cancelled' };
 type ProbeState = { state: 'off' } | { state: 'running'; samples: ProbeSample[] } | { state: 'ok'; summary: ProbeSummary } | { state: 'cancelled' };
 
 interface Run {
@@ -37,14 +40,13 @@ interface Run {
 
 const fmtMs = (ms: number | undefined) => (ms === undefined ? '—' : ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${Math.round(ms)} ms`);
 const fmtBytes = (b: number | undefined) => (b === undefined ? '—' : b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(2)} MB` : `${Math.round(b / 1024)} KB`);
+const pageSpeedSiteUrl = (url: string, strategy: Strategy) => `https://pagespeed.web.dev/analysis?url=${encodeURIComponent(url)}&form_factor=${strategy}`;
 
 export function UrlCheck() {
   const [input, setInput] = useState('');
   const [inputError, setInputError] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<Strategy>('mobile');
-  const [usePsi, setUsePsi] = useState(true);
-  const [useProbe, setUseProbe] = useState(true);
-  const [apiKey, setApiKey] = useState('');
+  const [useProbe, setUseProbe] = useState(false);
   const [run, setRun] = useState<Run | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -63,15 +65,21 @@ export function UrlCheck() {
 
   const update = (patch: Partial<Run>) => setRun((r) => (r ? { ...r, ...patch } : r));
 
-  const start = async (e: FormEvent) => {
-    e.preventDefault();
+  const probeTask = async (url: string) => {
+    const samples: ProbeSample[] = [];
+    update({ probe: { state: 'running', samples: [] } });
+    const summary = await runBrowserProbe(url, PROBE_COUNT, PROBE_TIMEOUT_MS, undefined, (s) => {
+      samples.push(s);
+      if (!cancelledRef.current) update({ probe: { state: 'running', samples: [...samples] } });
+    });
+    update({ probe: cancelledRef.current ? { state: 'cancelled' } : { state: 'ok', summary } });
+  };
+
+  const start = async (e?: FormEvent) => {
+    e?.preventDefault();
     const n = normalizeUrl(input);
     if (!n.ok) {
       setInputError(n.error);
-      return;
-    }
-    if (!usePsi && !useProbe) {
-      setInputError('Choose at least one measurement method.');
       return;
     }
     setInputError(null);
@@ -81,48 +89,14 @@ export function UrlCheck() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     const probeAllowed = useProbe && n.url.startsWith('https:');
-    setRun({
-      url: n.url,
-      host: n.host,
-      notes: n.notes,
-      strategy,
-      startedAt: new Date(),
-      psi: usePsi ? { state: 'running' } : { state: 'off' },
-      probe: probeAllowed ? { state: 'running', samples: [] } : { state: 'off' },
-    });
+    setRun({ url: n.url, host: n.host, notes: n.notes, strategy, startedAt: new Date(), psi: { state: 'running' }, probe: probeAllowed ? { state: 'running', samples: [] } : { state: 'off' } });
 
-    const psiTask = usePsi
-      ? (async () => {
-          const timer = setTimeout(() => ctrl.abort(new DOMException('timeout', 'TimeoutError')), PSI_TIMEOUT_MS);
-          try {
-            const res = await fetch(psiRequestUrl(n.url, strategy, apiKey), { signal: ctrl.signal, credentials: 'omit', referrerPolicy: 'no-referrer' });
-            const body: unknown = await res.json().catch(() => null);
-            if (!res.ok) update({ psi: { state: 'error', error: explainPsiError(res.status, body) } });
-            else update({ psi: { state: 'ok', summary: parsePsi(body) } });
-          } catch (err) {
-            if (cancelledRef.current) update({ psi: { state: 'cancelled' } });
-            else {
-              const reason = ctrl.signal.reason as { name?: string } | undefined;
-              update({ psi: { state: 'error', error: explainPsiError(null, null, reason?.name === 'TimeoutError' ? reason : err) } });
-            }
-          } finally {
-            clearTimeout(timer);
-          }
-        })()
-      : Promise.resolve();
+    const timer = setTimeout(() => ctrl.abort(new DOMException('timeout', 'TimeoutError')), PSI_TIMEOUT_MS);
+    const psiTask = runPageSpeed(n.url, strategy, { proxyUrl: SITE.psiProxyUrl || undefined, signal: ctrl.signal })
+      .then((result) => update({ psi: cancelledRef.current ? { state: 'cancelled' } : { state: 'done', result } }))
+      .finally(() => clearTimeout(timer));
 
-    const probeTask = probeAllowed
-      ? (async () => {
-          const samples: ProbeSample[] = [];
-          const summary = await runBrowserProbe(n.url, PROBE_COUNT, PROBE_TIMEOUT_MS, undefined, (s) => {
-            samples.push(s);
-            if (!cancelledRef.current) update({ probe: { state: 'running', samples: [...samples] } });
-          });
-          update({ probe: cancelledRef.current ? { state: 'cancelled' } : { state: 'ok', summary } });
-        })()
-      : Promise.resolve();
-
-    await Promise.allSettled([psiTask, probeTask]);
+    await Promise.allSettled([psiTask, probeAllowed ? probeTask(n.url) : Promise.resolve()]);
     update({ finishedAt: new Date() });
     requestAnimationFrame(() => resultsRef.current?.focus());
   };
@@ -132,142 +106,154 @@ export function UrlCheck() {
     abortRef.current?.abort();
   };
 
+  const runProbeOnly = async () => {
+    if (!run || !run.url.startsWith('https:')) return;
+    cancelledRef.current = false;
+    await probeTask(run.url);
+    update({ finishedAt: new Date() });
+  };
+
   return (
     <div className="space-y-6">
-      <Card className="max-w-4xl">
-        <h2 className="text-lg font-semibold">Check a website or API URL</h2>
+      <Card className="max-w-3xl">
+        <h2 className="text-xl font-semibold">Analyze a website</h2>
         <p className="mt-1 text-sm text-muted">
-          Measures what is visible from outside: HTTP status, redirects, server response time and page-load metrics. It cannot see inside your
-          service, so it never reports database, query or function timing. For that, <Link to="/analyze/upload">import a trace</Link>.
+          Enter a public web address. TraceDetective runs Google’s PageSpeed Insights test and shows how the page loads in a lab test and, when Google has
+          enough visits, for real Chrome users. No account or setup needed.
         </p>
-        <form onSubmit={start} className="mt-4 space-y-4" noValidate>
-          <div>
-            <label htmlFor="url-input" className="text-sm font-semibold">
-              URL
-            </label>
-            <div className="mt-1 flex flex-col gap-2 sm:flex-row">
-              <input
-                id="url-input"
-                type="url"
-                inputMode="url"
-                autoComplete="url"
-                spellCheck={false}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="https://example.com or example.com/api/health"
-                aria-invalid={!!inputError}
-                aria-describedby={inputError ? 'url-error' : 'url-help'}
-                disabled={running}
-                className="min-w-0 flex-1 rounded-lg border border-line bg-navy px-3 py-2 text-sm"
-              />
-              {running ? (
-                <Button onClick={cancel}>Cancel</Button>
-              ) : (
-                <Button type="submit" variant="primary">
-                  Run check
-                </Button>
-              )}
-            </div>
-            {inputError ? (
-              <p id="url-error" role="alert" className="mt-1 text-sm text-danger">
-                {inputError}
-              </p>
+        <form onSubmit={start} className="mt-4 space-y-3" noValidate>
+          <label htmlFor="url-input" className="sr-only">
+            Website URL
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              id="url-input"
+              type="url"
+              inputMode="url"
+              autoComplete="url"
+              spellCheck={false}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="example.com"
+              aria-invalid={!!inputError}
+              aria-describedby={inputError ? 'url-error' : 'url-help'}
+              disabled={running}
+              className="min-w-0 flex-1 rounded-lg border border-line bg-navy px-3 py-3 text-base"
+            />
+            {running ? (
+              <Button onClick={cancel} className="py-3">
+                Cancel
+              </Button>
             ) : (
-              <p id="url-help" className="mt-1 text-xs text-muted">
-                Public http(s) addresses only. Local, private-network and internal addresses are refused, and so are URLs whose query string looks like it holds a secret.
-              </p>
+              <Button type="submit" variant="primary" className="py-3 text-base">
+                Analyze Website
+              </Button>
             )}
           </div>
-
-          <fieldset className="grid gap-3 md:grid-cols-2" disabled={running}>
-            <legend className="sr-only">Measurement methods</legend>
-            <label className="flex gap-3 rounded-xl border border-line p-3">
-              <input type="checkbox" checked={usePsi} onChange={(e) => setUsePsi(e.target.checked)} className="mt-1" />
-              <span className="text-sm">
-                <span className="font-semibold">Google PageSpeed Insights</span>
-                <span className="block text-muted">
-                  Google’s servers load the page in a test browser (Lighthouse) and add real-user Chrome data when it exists. <strong>Sends the URL to Google.</strong> Takes 15–60 s.
-                </span>
-              </span>
-            </label>
-            <label className="flex gap-3 rounded-xl border border-line p-3">
-              <input type="checkbox" checked={useProbe} onChange={(e) => setUseProbe(e.target.checked)} className="mt-1" />
-              <span className="text-sm">
-                <span className="font-semibold">Browser probe ({PROBE_COUNT} requests)</span>
-                <span className="block text-muted">
-                  Your own browser requests the URL {PROBE_COUNT} times and times each response from your network. No cookies are sent. Status codes are not visible to the page.
-                </span>
-              </span>
-            </label>
-          </fieldset>
-
-          {usePsi && (
-            <div className="grid gap-3 md:grid-cols-2">
-              <fieldset disabled={running}>
-                <legend className="text-sm font-semibold">Test device</legend>
-                <div className="mt-1 flex gap-4 text-sm">
-                  {(['mobile', 'desktop'] as const).map((s) => (
-                    <label key={s} className="flex items-center gap-2">
-                      <input type="radio" name="strategy" value={s} checked={strategy === s} onChange={() => setStrategy(s)} />
-                      {s === 'mobile' ? 'Mobile (slow 4G, mid-range phone)' : 'Desktop'}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-              <div>
-                <label htmlFor="psi-key" className="text-sm font-semibold">
-                  PageSpeed API key <span className="font-normal text-muted">(optional)</span>
-                </label>
-                <input
-                  id="psi-key"
-                  type="password"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  disabled={running}
-                  aria-describedby="psi-key-help"
-                  className="mt-1 w-full rounded-lg border border-line bg-navy px-3 py-2 text-sm"
-                />
-                <p id="psi-key-help" className="mt-1 text-xs text-muted">
-                  The shared free quota is often used up. A{' '}
-                  <a href="https://developers.google.com/speed/docs/insights/v5/get-started#APIKey" target="_blank" rel="noopener noreferrer">
-                    free key from Google
-                  </a>{' '}
-                  avoids that. It is sent only to Google with this request and is never saved.
-                </p>
-              </div>
-            </div>
+          {inputError ? (
+            <p id="url-error" role="alert" className="text-sm text-danger">
+              {inputError}
+            </p>
+          ) : (
+            <p id="url-help" className="text-xs text-muted">
+              Public websites only. The address is sent to Google PageSpeed Insights{SITE.psiProxyUrl ? ' through the TraceDetective analysis service' : ''}. Nothing else
+              about you is sent. <Link to="/docs#privacy">Privacy</Link>
+            </p>
           )}
+
+          <details className="rounded-xl border border-line px-4 py-3 text-sm">
+            <summary className="cursor-pointer font-semibold">Advanced options</summary>
+            <fieldset className="mt-3" disabled={running}>
+              <legend className="font-semibold">Test device</legend>
+              <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1">
+                {(['mobile', 'desktop'] as const).map((s) => (
+                  <label key={s} className="flex items-center gap-2">
+                    <input type="radio" name="strategy" value={s} checked={strategy === s} onChange={() => setStrategy(s)} />
+                    {s === 'mobile' ? 'Mobile (default: mid-range phone, slow 4G)' : 'Desktop'}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <label className="mt-4 flex gap-3">
+              <input type="checkbox" checked={useProbe} onChange={(e) => setUseProbe(e.target.checked)} disabled={running} className="mt-1" />
+              <span>
+                <span className="font-semibold">Also time the site from my browser ({PROBE_COUNT} requests)</span>
+                <span className="mt-1 block text-muted">
+                  Your browser requests the address {PROBE_COUNT} times and measures how long each answer takes from your network. Browsers keep other sites’
+                  responses private (CORS), so this check cannot see status codes, redirects or page content, and shows DNS and connection times only if
+                  the site allows it. Some sites or extensions block it. No cookies are sent.
+                </span>
+              </span>
+            </label>
+          </details>
         </form>
       </Card>
 
-      {run && <Results run={run} elapsed={elapsed} running={running} headingRef={resultsRef} />}
+      {run && <Results run={run} elapsed={elapsed} running={running} headingRef={resultsRef} onRetry={() => void start()} onProbe={() => void runProbeOnly()} />}
     </div>
   );
 }
 
-function Results({ run, elapsed, running, headingRef }: { run: Run; elapsed: number; running: boolean; headingRef: React.RefObject<HTMLHeadingElement | null> }) {
-  const psi = run.psi.state === 'ok' ? run.psi.summary : null;
+function Results({
+  run,
+  elapsed,
+  running,
+  headingRef,
+  onRetry,
+  onProbe,
+}: {
+  run: Run;
+  elapsed: number;
+  running: boolean;
+  headingRef: React.RefObject<HTMLHeadingElement | null>;
+  onRetry: () => void;
+  onProbe: () => void;
+}) {
+  const result = run.psi.state === 'done' ? run.psi.result : null;
+  const psi = result?.ok ? result.summary : null;
   const probe = run.probe.state === 'ok' ? run.probe.summary : null;
   const findings: UrlFinding[] = running ? [] : urlFindings(psi, probe);
-  const breakdown = probe?.samples.find((s) => s.breakdown)?.breakdown;
-  const httpOnly = run.url.startsWith('http:');
 
   const exportReport = () => {
-    downloadJson(`tracedetective-url-${run.host}-${run.startedAt.toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`, {
-      kind: 'url-check',
+    downloadJson(`tracedetective-website-${run.host}-${run.startedAt.toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`, {
+      kind: 'website-analysis',
       provenance: {
         tool: TOOL,
         generatedAt: new Date().toISOString(),
         startedAt: run.startedAt.toISOString(),
         finishedAt: run.finishedAt?.toISOString(),
         browserUserAgent: navigator.userAgent,
-        dataNotice: 'External measurements of a public URL. They describe what a client sees and cannot show server-internal causes.',
+        measuredBy: result ? (result.via === 'proxy' ? 'Google PageSpeed Insights via the TraceDetective analysis service' : 'Google PageSpeed Insights') : null,
+        cachedResult: result?.ok ? result.cached : false,
+        dataNotice: 'External measurements of a public URL. They describe what a visitor sees and cannot show server-internal causes.',
       },
-      input: { url: run.url, notes: run.notes, strategy: run.strategy },
-      pageSpeedInsights: run.psi.state === 'ok' ? run.psi.summary : run.psi,
-      browserProbe: run.probe.state === 'ok' ? run.probe.summary : run.probe,
+      input: { url: run.url, notes: run.notes, device: run.strategy },
+      labData: psi
+        ? {
+            description: 'Lighthouse: one simulated page load in Google’s test environment.',
+            finalUrl: psi.finalUrl,
+            httpStatus: psi.mainDocument?.statusCode,
+            protocol: psi.mainDocument?.protocol,
+            redirects: psi.redirects,
+            serverResponseMs: psi.serverResponseMs,
+            fcpMs: psi.fcpMs,
+            lcpMs: psi.lcpMs,
+            tbtMs: psi.tbtMs,
+            cls: psi.cls,
+            speedIndexMs: psi.speedIndexMs,
+            totalBytes: psi.totalBytes,
+            requestCount: psi.requestCount,
+            performanceScore: psi.performanceScore,
+            lighthouseVersion: psi.lighthouseVersion,
+            testedAt: psi.fetchTime,
+            warnings: psi.runWarnings,
+          }
+        : null,
+      fieldData: psi?.field
+        ? { description: 'Chrome UX Report: 75th percentile of real Chrome users over the last 28 days.', scope: psi.field.scope, overall: psi.field.overall, metrics: psi.field.metrics }
+        : null,
+      pageSpeedError: result && !result.ok ? result.error : null,
+      browserProbe: probe ?? (run.probe.state === 'off' ? 'not run' : run.probe),
       findings,
     });
   };
@@ -275,19 +261,21 @@ function Results({ run, elapsed, running, headingRef }: { run: Run; elapsed: num
   return (
     <section aria-labelledby="url-results-h" className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="url-results-h" ref={headingRef} tabIndex={-1} className="text-xl font-bold outline-none">
+        <h2 id="url-results-h" ref={headingRef} tabIndex={-1} className="min-w-0 text-xl font-bold outline-none">
           Results for <span className="break-all font-mono text-base">{run.url}</span>
         </h2>
         {!running && (
           <div className="flex flex-wrap gap-2">
-            <Button onClick={exportReport}>Export JSON</Button>
+            <Button variant="primary" onClick={exportReport}>
+              Export Report
+            </Button>
             <a
-              href={`https://pagespeed.web.dev/analysis?url=${encodeURIComponent(run.url)}&form_factor=${run.strategy}`}
+              href={pageSpeedSiteUrl(run.url, run.strategy)}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold text-muted no-underline hover:bg-surface-2 hover:text-ink hover:no-underline"
             >
-              Open full PageSpeed report ↗
+              Full report on PageSpeed Insights ↗
             </a>
           </div>
         )}
@@ -305,204 +293,289 @@ function Results({ run, elapsed, running, headingRef }: { run: Run; elapsed: num
         {running ? (
           <p className="flex items-center gap-2 text-cyan">
             <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-cyan" aria-hidden="true" />
-            Measuring… {elapsed} s elapsed.
-            {run.psi.state === 'running' && ' PageSpeed Insights usually takes 15–60 s.'}
-            {run.probe.state === 'running' && ` Browser probe ${run.probe.samples.length}/${PROBE_COUNT}.`}
+            {run.psi.state === 'running' ? `Loading the page in Google’s test browser… ${elapsed} s (usually 15–60 s)` : 'Finishing the browser timing check…'}
+            {run.probe.state === 'running' && ` · Browser timing ${run.probe.samples.length}/${PROBE_COUNT}`}
           </p>
         ) : (
-          <p className="text-muted">Finished at {(run.finishedAt ?? new Date()).toLocaleString()}.</p>
+          <p className="text-muted">
+            {run.strategy === 'mobile' ? 'Mobile' : 'Desktop'} test · finished {(run.finishedAt ?? new Date()).toLocaleString()}
+            {result?.ok && result.cached ? ' · reused a result from the last 15 minutes' : ''}
+          </p>
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <h3 className="font-semibold">PageSpeed Insights</h3>
-          <PsiPanel state={run.psi} />
-        </Card>
-        <Card>
-          <h3 className="font-semibold">Browser probe</h3>
-          <ProbePanel state={run.probe} httpOnly={httpOnly} />
-        </Card>
-      </div>
+      {result && !result.ok && <PsiErrorCard run={run} result={result} onRetry={onRetry} onProbe={onProbe} />}
+      {run.psi.state === 'cancelled' && <p className="text-sm text-muted">Cancelled.</p>}
 
-      <Card>
-        <h3 className="font-semibold">Connection timing (DNS, TCP, TLS)</h3>
-        {breakdown ? (
-          <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-5">
-            {(
-              [
-                ['DNS', breakdown.dnsMs],
-                ['TCP connect', breakdown.connectMs],
-                ['TLS', breakdown.tlsMs],
-                ['Waiting (TTFB)', breakdown.waitMs],
-                ['Download', breakdown.downloadMs],
-              ] as const
-            ).map(([k, v]) => (
-              <div key={k}>
-                <dt className="text-muted">{k}</dt>
-                <dd className="tabular-nums">{fmtMs(v)}</dd>
-              </div>
+      {psi && (
+        <>
+          <Overview psi={psi} />
+          <LabSection psi={psi} strategy={run.strategy} />
+          <FieldSection psi={psi} />
+        </>
+      )}
+
+      {run.probe.state !== 'off' && <ProbeSection state={run.probe} />}
+
+      {!running && findings.length > 0 && (
+        <Card>
+          <h3 className="text-lg font-semibold">Findings</h3>
+          <p className="mt-1 text-sm text-muted">Shown only when a measured value crosses a published threshold. Each finding says which measurement it comes from.</p>
+          <ul className="mt-3 space-y-4">
+            {findings.map((f) => (
+              <li key={f.id} className="rounded-xl border border-line p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <SeverityBadge severity={f.severity} />
+                  <h4 className="font-semibold">{f.title}</h4>
+                  <SourceTag source={f.source} />
+                </div>
+                <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted">Evidence</p>
+                <ul className="list-disc pl-5 text-sm">
+                  {f.evidence.map((e) => (
+                    <li key={e} className="break-words">
+                      {e}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted">Check next</p>
+                <ul className="list-disc pl-5 text-sm">
+                  {f.verifyNext.map((e) => (
+                    <li key={e}>{e}</li>
+                  ))}
+                </ul>
+              </li>
             ))}
-          </dl>
-        ) : (
-          <p className="mt-2 text-sm text-muted">
-            Not available. Browsers only expose DNS, connection and TLS timing for another site when that site sends a <code>Timing-Allow-Origin</code> header,
-            and PageSpeed Insights does not report them separately. The probe’s first request usually includes this setup; later requests reuse the connection.
-          </p>
-        )}
-      </Card>
-
-      {!running && (
-        <Card>
-          <h3 className="font-semibold">Findings</h3>
-          {findings.length === 0 ? (
-            <p className="mt-2 text-sm text-muted">No measurements completed, so there is nothing to report.</p>
-          ) : (
-            <ul className="mt-3 space-y-4">
-              {findings.map((f) => (
-                <li key={f.id} className="rounded-xl border border-line p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <SeverityBadge severity={f.severity} />
-                    <h4 className="font-semibold">{f.title}</h4>
-                    <span className="text-xs text-muted">Source: {f.source}</span>
-                  </div>
-                  <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted">Evidence</p>
-                  <ul className="list-disc pl-5 text-sm">
-                    {f.evidence.map((e) => (
-                      <li key={e} className="break-words">{e}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted">Check next</p>
-                  <ul className="list-disc pl-5 text-sm">
-                    {f.verifyNext.map((e) => (
-                      <li key={e}>{e}</li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-          )}
+          </ul>
         </Card>
       )}
 
-      <Card>
-        <h3 className="font-semibold">Methodology</h3>
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
-          <li>
-            <strong className="text-ink">PageSpeed Insights</strong>: Google runs Lighthouse from its own data centres with {run.strategy === 'mobile' ? 'simulated slow 4G and a mid-range phone CPU' : 'a desktop profile'}. Server response time,
-            HTTP status and redirects come from that test browser’s main document request. Field data comes from the Chrome UX Report (real Chrome users, 28-day
-            window, 75th percentile) and is only shown when Google has enough traffic for the URL or the whole site.
-          </li>
-          <li>
-            <strong className="text-ink">Browser probe</strong>: {PROBE_COUNT} sequential <code>GET</code> requests from this browser with <code>mode: no-cors</code>, no cookies,
-            no referrer and caching disabled. Each time is from sending the request until the response finishes, measured with <code>performance.now()</code>. Times include your
-            network, Wi-Fi and location. The response is opaque, so status codes and redirects cannot be read. DNS, TCP and TLS times are shown only when the site sends a <code>Timing-Allow-Origin</code> header.
-          </li>
-          <li>Thresholds: server response 600 ms (Lighthouse), LCP 2.5 s, CLS 0.1 and TBT 200 ms (Core Web Vitals “good”), page weight 1.6 MB.</li>
-          <li>One run is one sample. Repeat at different times before drawing conclusions, and confirm causes with server-side logs or traces.</li>
-        </ul>
-      </Card>
+      {!running && (psi || probe) && <Methodology strategy={run.strategy} />}
     </section>
   );
 }
 
-function PsiPanel({ state }: { state: PsiState }) {
-  if (state.state === 'off') return <p className="mt-2 text-sm text-muted">Not selected for this run.</p>;
-  if (state.state === 'running') return <p className="mt-2 text-sm text-muted">Waiting for Google… (times out after 90 s)</p>;
-  if (state.state === 'cancelled') return <p className="mt-2 text-sm text-muted">Cancelled.</p>;
-  if (state.state === 'error')
-    return (
-      <div role="alert" className="mt-2 text-sm">
-        <p className="font-semibold text-danger">Measurement failed</p>
-        <p className="mt-1">{state.error.message}</p>
-      </div>
-    );
-  const p = state.summary;
-  const rows: [string, string][] = [
-    ['HTTP status', p.mainDocument?.statusCode !== undefined ? String(p.mainDocument.statusCode) : '—'],
-    ['Final URL', p.finalUrl || '—'],
-    ['Redirects', p.redirects.length > 1 ? p.redirects.map((r) => r.url).join(' → ') : 'None'],
-    ['Protocol', p.mainDocument?.protocol ?? '—'],
-    ['Server response time', fmtMs(p.serverResponseMs)],
-    ['First Contentful Paint', fmtMs(p.fcpMs)],
-    ['Largest Contentful Paint', fmtMs(p.lcpMs)],
-    ['Total Blocking Time', fmtMs(p.tbtMs)],
-    ['Cumulative Layout Shift', p.cls === undefined ? '—' : p.cls.toFixed(3)],
-    ['Page weight', p.totalBytes === undefined ? '—' : `${fmtBytes(p.totalBytes)}${p.requestCount ? ` in ${p.requestCount} request${p.requestCount === 1 ? '' : 's'}` : ''}`],
-    ['Performance score', p.performanceScore === undefined ? '—' : `${Math.round(p.performanceScore * 100)} / 100`],
-    ['Tested', `${p.fetchTime ? new Date(p.fetchTime).toLocaleString() : '—'} · Lighthouse ${p.lighthouseVersion || '?'} · ${p.formFactor || '?'}`],
-  ];
+function SourceTag({ source }: { source: UrlFinding['source'] }) {
+  const style = source === 'Lighthouse lab test' ? 'border-violet/60 text-violet' : source === 'Chrome real-user data' ? 'border-teal/60 text-teal' : 'border-cyan/60 text-cyan';
+  return <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${style}`}>{source}</span>;
+}
+
+function PsiErrorCard({ run, result, onRetry, onProbe }: { run: Run; result: Extract<PageSpeedResult, { ok: false }>; onRetry: () => void; onProbe: () => void }) {
+  const { error } = result;
+  const titles: Record<string, string> = {
+    quota: 'The lab test is unavailable right now',
+    rate_limited: 'Please wait a moment',
+    busy: 'The analysis service is busy',
+    invalid: 'This address cannot be analysed',
+    lighthouse: 'Google could not load this page',
+    timeout: 'The test took too long',
+    network: 'The analysis service could not be reached',
+    unknown: 'The analysis did not complete',
+  };
+  const retryable = error.kind !== 'invalid';
+  const canProbe = run.probe.state === 'off' && run.url.startsWith('https:');
   return (
-    <>
-      <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm">
-        {rows.map(([k, v]) => (
-          <div key={k} className="contents">
-            <dt className="text-muted">{k}</dt>
-            <dd className="break-words tabular-nums">{v}</dd>
-          </div>
-        ))}
+    <Card className="border-warn/60">
+      <div role="alert">
+        <h3 className="text-lg font-semibold text-warn">{titles[error.kind] ?? titles.unknown}</h3>
+        <p className="mt-2 text-sm">{error.message}</p>
+        <p className="mt-2 text-sm text-muted">No lab or real-user results are shown, because none were measured.</p>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {retryable && <Button onClick={onRetry}>Try again</Button>}
+        <a
+          href={pageSpeedSiteUrl(run.url, run.strategy)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center rounded-lg border border-line bg-surface-2 px-4 py-2 text-sm font-semibold text-ink no-underline hover:border-cyan hover:no-underline"
+        >
+          Open on PageSpeed Insights ↗
+        </a>
+        {canProbe && (
+          <Button variant="ghost" onClick={onProbe}>
+            Time it from my browser instead
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function Overview({ psi }: { psi: PsiSummary }) {
+  const status = psi.mainDocument?.statusCode;
+  const redirects = Math.max(0, psi.redirects.length - 1);
+  return (
+    <Card>
+      <h3 className="text-lg font-semibold">Overview</h3>
+      <dl className="mt-3 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+        <Fact label="HTTP status" value={status === undefined ? '—' : String(status)} tone={status !== undefined && status >= 400 ? 'poor' : undefined} />
+        <Fact label="Redirects" value={redirects === 0 ? 'None' : String(redirects)} tone={redirects > 1 ? 'needs-improvement' : undefined} />
+        <Fact label="Server response" value={fmtMs(psi.serverResponseMs)} tone={psi.serverResponseMs === undefined ? undefined : rateMetric('serverResponse', psi.serverResponseMs)} />
+        <Fact label="Performance score" value={psi.performanceScore === undefined ? '—' : `${Math.round(psi.performanceScore * 100)} / 100`} />
       </dl>
-      <h4 className="mt-4 text-sm font-semibold">Real-user data</h4>
-      {p.field ? (
-        <ul className="mt-1 text-sm">
-          <li className="text-muted">Scope: {p.field.scope === 'url' ? 'this URL' : 'whole origin (not enough data for this URL)'}</li>
-          {p.field.metrics.map((m) => (
-            <li key={m.key}>
-              {m.label}: <span className="tabular-nums">{m.unit === 'ms' ? fmtMs(m.percentile) : m.percentile.toFixed(2)}</span>{' '}
-              <span className="text-muted">({m.category.toLowerCase().replace(/_/g, ' ')})</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-1 text-sm text-muted">Not available. Google has too little Chrome traffic data for this URL and site.</p>
-      )}
-      {p.runWarnings.length > 0 && (
-        <ul className="mt-3 list-disc pl-5 text-xs text-warn">
-          {p.runWarnings.map((w) => (
+      <p className="mt-3 break-all text-xs text-muted">
+        Final address: {psi.finalUrl || '—'}
+        {psi.mainDocument?.protocol ? ` · ${psi.mainDocument.protocol}` : ''}
+        {psi.redirects.length > 1 ? ` · ${psi.redirects.map((r) => r.url).join(' → ')}` : ''}
+      </p>
+    </Card>
+  );
+}
+
+const ratingText: Record<Rating, string> = { good: 'Good', 'needs-improvement': 'Needs improvement', poor: 'Poor' };
+const ratingStyle: Record<Rating, string> = { good: 'text-teal', 'needs-improvement': 'text-warn', poor: 'text-danger' };
+
+function Fact({ label, value, tone, hint }: { label: string; value: ReactNode; tone?: Rating; hint?: string }) {
+  return (
+    <div className="min-w-0 rounded-xl border border-line p-3">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="mt-1 text-lg font-semibold tabular-nums">{value}</dd>
+      {tone && <dd className={`text-xs font-semibold ${ratingStyle[tone]}`}>{ratingText[tone]}</dd>}
+      {hint && <dd className="text-xs text-muted">{hint}</dd>}
+    </div>
+  );
+}
+
+function LabSection({ psi, strategy }: { psi: PsiSummary; strategy: Strategy }) {
+  const metric = (label: string, key: RatedMetric, v: number | undefined, isScore = false) => (
+    <Fact key={label} label={label} value={v === undefined ? '—' : isScore ? v.toFixed(3) : fmtMs(v)} tone={v === undefined ? undefined : rateMetric(key, v)} />
+  );
+  return (
+    <Card aria-labelledby="lab-h">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 id="lab-h" className="text-lg font-semibold">
+          Lab test
+        </h3>
+        <span className="rounded-full border border-violet/60 px-2 py-0.5 text-xs font-semibold text-violet">Lighthouse · simulated</span>
+      </div>
+      <p className="mt-1 text-sm text-muted">
+        One page load in Google’s test environment, {strategy === 'mobile' ? 'as a mid-range phone on a slow 4G connection' : 'as a desktop computer'}. Useful for finding
+        causes and comparing changes. It is not what your visitors experience on average.
+      </p>
+      <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
+        {metric('First Contentful Paint', 'fcp', psi.fcpMs)}
+        {metric('Largest Contentful Paint', 'lcp', psi.lcpMs)}
+        {metric('Total Blocking Time', 'tbt', psi.tbtMs)}
+        {metric('Cumulative Layout Shift', 'cls', psi.cls, true)}
+        {metric('Speed Index', 'speedIndex', psi.speedIndexMs)}
+      </dl>
+      <p className="mt-3 text-sm text-muted">
+        Page weight {fmtBytes(psi.totalBytes)}
+        {psi.requestCount ? ` in ${psi.requestCount} request${psi.requestCount === 1 ? '' : 's'}` : ''} · Lighthouse {psi.lighthouseVersion || '?'}
+        {psi.fetchTime ? ` · tested ${new Date(psi.fetchTime).toLocaleString()}` : ''}
+      </p>
+      {psi.runWarnings.length > 0 && (
+        <ul className="mt-2 list-disc pl-5 text-xs text-warn">
+          {psi.runWarnings.map((w) => (
             <li key={w}>{w}</li>
           ))}
         </ul>
       )}
-    </>
+    </Card>
   );
 }
 
-function ProbePanel({ state, httpOnly }: { state: ProbeState; httpOnly: boolean }) {
-  if (state.state === 'off')
-    return <p className="mt-2 text-sm text-muted">{httpOnly ? 'Skipped: browsers block http:// requests from an https:// page.' : 'Not selected for this run.'}</p>;
-  if (state.state === 'cancelled') return <p className="mt-2 text-sm text-muted">Cancelled.</p>;
-  const samples = state.state === 'running' ? state.samples : state.summary.samples;
-  const s = state.state === 'ok' ? state.summary : null;
+function FieldSection({ psi }: { psi: PsiSummary }) {
   return (
-    <>
-      {s && (
-        <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-          <dt className="text-muted">Successful</dt>
-          <dd>
-            {s.successful} of {s.samples.length}
-          </dd>
-          <dt className="text-muted">First request</dt>
-          <dd className="tabular-nums">{fmtMs(s.firstMs)}</dd>
-          <dt className="text-muted">Median (all)</dt>
-          <dd className="tabular-nums">{fmtMs(s.medianMs)}</dd>
-          <dt className="text-muted">Median of repeats</dt>
-          <dd className="tabular-nums">{fmtMs(s.repeatMedianMs)}</dd>
-          <dt className="text-muted">Range</dt>
-          <dd className="tabular-nums">
-            {fmtMs(s.minMs)} – {fmtMs(s.maxMs)}
-          </dd>
-          <dt className="text-muted">HTTP status</dt>
-          <dd className="text-muted">Not visible to the browser (opaque response)</dd>
-        </dl>
+    <Card aria-labelledby="field-h">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 id="field-h" className="text-lg font-semibold">
+          Real users
+        </h3>
+        <span className="rounded-full border border-teal/60 px-2 py-0.5 text-xs font-semibold text-teal">Chrome UX Report · last 28 days</span>
+      </div>
+      {psi.field ? (
+        <>
+          <p className="mt-1 text-sm text-muted">
+            What real Chrome users experienced {psi.field.scope === 'url' ? 'on this page' : 'across the whole site (this page has too few visits on its own)'}. Each value
+            is the 75th percentile: 3 out of 4 visits were at least this fast.
+          </p>
+          <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
+            {psi.field.metrics.map((m) => (
+              <Fact key={m.key} label={m.label.replace(' (p75)', '')} value={m.unit === 'ms' ? fmtMs(m.percentile) : m.percentile.toFixed(2)} tone={rateFieldCategory(m.category)} />
+            ))}
+          </dl>
+        </>
+      ) : (
+        <p className="mt-2 text-sm text-muted">
+          Not available. Google publishes real-user data only for pages and sites with enough Chrome visits. The lab test above is still valid; it just cannot say
+          what real visitors experience.
+        </p>
       )}
-      <ol className="mt-3 space-y-1 text-sm">
-        {samples.map((x) => (
-          <li key={x.attempt} className="flex flex-wrap gap-x-2">
-            <span className="text-muted">#{x.attempt}</span>
-            {x.ok ? <span className="tabular-nums">{fmtMs(x.totalMs)}</span> : <span className="text-danger">{x.error}</span>}
-          </li>
-        ))}
-      </ol>
-    </>
+    </Card>
+  );
+}
+
+function ProbeSection({ state }: { state: ProbeState }) {
+  if (state.state === 'off') return null;
+  const samples = state.state === 'running' ? state.samples : state.state === 'ok' ? state.summary.samples : [];
+  const s = state.state === 'ok' ? state.summary : null;
+  const breakdown = s?.samples.find((x) => x.breakdown)?.breakdown;
+  return (
+    <Card aria-labelledby="probe-h">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 id="probe-h" className="text-lg font-semibold">
+          From your browser
+        </h3>
+        <span className="rounded-full border border-cyan/60 px-2 py-0.5 text-xs font-semibold text-cyan">Browser probe · your network</span>
+      </div>
+      {state.state === 'cancelled' ? (
+        <p className="mt-2 text-sm text-muted">Cancelled.</p>
+      ) : (
+        <>
+          {s && (
+            <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+              <Fact label="Successful" value={`${s.successful} of ${s.samples.length}`} />
+              <Fact label="First request" value={fmtMs(s.firstMs)} hint="includes connection setup" />
+              <Fact label="Median of repeats" value={fmtMs(s.repeatMedianMs)} />
+              <Fact label="Range" value={`${fmtMs(s.minMs)} – ${fmtMs(s.maxMs)}`} />
+            </dl>
+          )}
+          <ol className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            {samples.map((x) => (
+              <li key={x.attempt}>
+                <span className="text-muted">#{x.attempt}</span> {x.ok ? <span className="tabular-nums">{fmtMs(x.totalMs)}</span> : <span className="text-danger">{x.error}</span>}
+              </li>
+            ))}
+          </ol>
+          <h4 className="mt-4 text-sm font-semibold">Connection timing (DNS, TCP, TLS)</h4>
+          {breakdown ? (
+            <p className="mt-1 text-sm tabular-nums">
+              DNS {fmtMs(breakdown.dnsMs)} · connect {fmtMs(breakdown.connectMs)} · TLS {fmtMs(breakdown.tlsMs)} · waiting {fmtMs(breakdown.waitMs)} · download {fmtMs(breakdown.downloadMs)}
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-muted">
+              Not available. Browsers only share these times for another site when that site sends a <code>Timing-Allow-Origin</code> header. Status codes are never
+              visible to this check.
+            </p>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+function Methodology({ strategy }: { strategy: Strategy }) {
+  return (
+    <details className="rounded-2xl border border-line bg-surface p-5 text-sm">
+      <summary className="cursor-pointer font-semibold">How these numbers were measured</summary>
+      <ul className="mt-3 list-disc space-y-2 pl-5 text-muted">
+        <li>
+          <strong className="text-ink">Lab test</strong>: Google PageSpeed Insights runs Lighthouse from Google’s data centres
+          {strategy === 'mobile' ? ', emulating a mid-range phone on slow 4G' : ' with a desktop profile'}. HTTP status, redirects and server response time come from
+          that test browser’s request for the page. One run is one sample.
+        </li>
+        <li>
+          <strong className="text-ink">Real users</strong>: the Chrome UX Report, collected from Chrome users who opted in, over a rolling 28-day window, reported at the
+          75th percentile. Shown only when Google has enough data.
+        </li>
+        <li>
+          <strong className="text-ink">Browser probe</strong> (optional): {PROBE_COUNT} sequential <code>GET</code> requests from your browser with <code>mode: no-cors</code>,
+          no cookies, no referrer and caching disabled, timed with <code>performance.now()</code>. Results include your own network. DNS, TCP and TLS times are shown only
+          when the site sends a <code>Timing-Allow-Origin</code> header.
+        </li>
+        <li>Ratings use the Core Web Vitals boundaries (LCP 2.5 s / 4 s, CLS 0.1 / 0.25, INP 200 / 500 ms) and Lighthouse boundaries for lab-only metrics.</li>
+        <li>An outside test cannot see inside the server. Confirm causes with server logs or traces; you can analyse traces on the <Link to="/analyze/upload">Upload trace</Link> page.</li>
+      </ul>
+    </details>
   );
 }

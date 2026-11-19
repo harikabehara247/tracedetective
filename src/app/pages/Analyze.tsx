@@ -9,7 +9,7 @@ import { UrlCheck } from './UrlCheck';
 import { openTour } from '../components/Tour';
 
 const MODES = [
-  { id: 'url', label: 'Check website URL' },
+  { id: 'url', label: 'Analyze website' },
   { id: 'upload', label: 'Upload trace' },
   { id: 'demo', label: 'Explore demo' },
 ] as const;
@@ -17,11 +17,12 @@ const MODES = [
 const OPTIONS = [
   {
     id: 'url',
-    title: 'Check website URL',
+    title: 'Analyze website',
     when: 'You have a public website or API endpoint and want to know how fast it responds.',
-    can: ['HTTP status, final URL and redirects', 'Server response time and page-load metrics (LCP, CLS, TBT)', 'Real-user Chrome data when Google has it', 'Response times from your own browser, repeated 5 times'],
+    can: ['HTTP status, final URL and redirects', 'Server response time and page-load metrics (LCP, CLS, TBT)', 'Real-user Chrome data when Google has it', 'Optional: response times from your own browser'],
     cannot: ['See inside the server: no database, query or function timing', 'Check local, private-network or login-protected pages'],
-    cta: 'Check a URL',
+    // No account, registration or API key is needed.
+    cta: 'Analyze a website',
   },
   {
     id: 'upload',

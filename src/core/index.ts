@@ -8,3 +8,4 @@ export * from './report';
 export * from './format';
 export * from './otlp';
 export * from './url';
+export * from './pagespeed';

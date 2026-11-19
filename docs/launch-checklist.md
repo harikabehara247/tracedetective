@@ -23,7 +23,7 @@ Each item needs evidence (a link, a command output or a screenshot) before it is
 ## Day 5: docs and review
 - [ ] README, PRIVACY, SECURITY, CONTRIBUTING, CODE_OF_CONDUCT, CHANGELOG reviewed
 - [ ] Accessibility pass: focus order, contrast, screen reader labels, reduced motion
-- [x] URL check built without a server (PageSpeed Insights plus browser probe), with input validation, private-address refusal and tests
+- [x] Website analysis without visitor API keys (PageSpeed Insights through the analysis service, optional browser probe), with input validation, private-address refusal and tests
 
 ## Day 6: deploy and case study
 - [ ] Static deployment live; URL opened and checked by a person

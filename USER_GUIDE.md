@@ -12,24 +12,32 @@ Open it at https://harikabehara247.github.io/tracedetective/ and choose **Start 
 | A trace from OpenTelemetry or another tracer | **Upload trace** | Waterfall, critical path, self time, insights with evidence, comparison | Live monitoring or percentiles across many requests |
 | Nothing yet, just curious | **Explore demo** | Four synthetic traces showing common problems | Real measurements |
 
-A common path: the URL check shows the server is slow to respond, so you capture a trace of that request and upload it to see which operation is responsible.
+A common path: website analysis shows the server is slow to respond, so you capture a trace of that request and upload it to see which operation is responsible.
 
-## Check website URL
+## Analyze website
 
-1. Enter a URL, for example `example.com` or `https://api.example.com/health`. `https://` is added if you leave it out.
-2. Choose the methods:
-   - **Google PageSpeed Insights.** Google loads the page in a test browser and reports status, redirects, server response time, FCP, LCP, TBT, CLS, page weight and, when available, 28-day real-user Chrome data. This sends the URL to Google and takes 15–60 seconds.
-   - **Browser probe.** Your browser requests the URL 5 times and times each response from your network. No cookies are sent. The status code cannot be read by a web page from another site, so it is shown as not visible.
-3. For PageSpeed, pick Mobile or Desktop. If you see "shared free quota is used up", get a free API key from Google (link under the field) and paste it. The key is used only for that request and is not saved.
-4. Press **Run check**. You can cancel at any time.
+1. Enter a public address, for example `example.com` or `https://www.example.com/pricing`. `https://` is added if you leave it out.
+2. Press **Analyze Website**. There is no account, registration or API key. The test takes 15–60 seconds and you can cancel at any time.
+3. Optional, under **Advanced options**:
+   - **Test device**: Mobile (the default, a mid-range phone on slow 4G) or Desktop.
+   - **Also time the site from my browser**: your browser requests the address 5 times and times each answer from your network. Browsers keep other sites’ responses private (CORS), so this cannot see status codes, redirects or content, and shows DNS, TCP and TLS times only when the site sends a `Timing-Allow-Origin` header. Some sites and browser extensions block it.
 
 **Reading the results**
 
-- *PageSpeed Insights* and *Browser probe* panels show the raw measurements.
-- *Connection timing* shows DNS, TCP and TLS only when the site allows it with a `Timing-Allow-Origin` header. Otherwise it says why it is not available. A first probe request much slower than the repeats usually means connection setup.
-- *Findings* appear only when a measurement crosses a stated threshold. Each lists its evidence and what to check next.
-- *Methodology* explains exactly how each number was measured.
-- **Export JSON** saves everything with the time, tool version and your browser's user agent. **Open full PageSpeed report** opens Google's own report for the same URL.
+- *Overview*: HTTP status, redirects, server response time and the Lighthouse performance score.
+- *Lab test* (Lighthouse, simulated): one page load in Google’s test environment. Good for finding causes and comparing changes, not a measure of what visitors experience on average.
+- *Real users* (Chrome UX Report, last 28 days): what real Chrome users experienced, at the 75th percentile. Only shown when Google has enough visits for the page or site. Low-traffic sites will see "Not available".
+- *From your browser*: only when you chose the browser probe.
+- *Findings* appear only when a measurement crosses a stated threshold. Each lists its evidence, its source (lab, real users or browser) and what to check next.
+- *How these numbers were measured* explains each method.
+- **Export Report** saves everything as JSON with the time, tool version and your browser's user agent. **Full report on PageSpeed Insights** opens Google's own report for the same address.
+
+**When the test cannot run**, the page says why and shows no numbers rather than empty or made-up ones:
+
+- *The lab test is unavailable right now*: Google's free quota is used up. Try again later, open the test on the PageSpeed Insights website, or time the site from your browser instead.
+- *Please wait a moment* / *The analysis service is busy*: too many tests in the last minute. Wait and try again.
+- *Google could not load this page*: the site did not answer Google's test browser (DNS error, timeout, blocked). Check the address.
+- *The test took too long*: no result arrived within 90 seconds. Try again.
 
 **What is refused:** local and private addresses (`localhost`, `192.168.x.x`, `10.x.x.x`, `169.254.169.254` and similar), URLs with a username or password, and URLs whose query string looks like it holds a secret (`?token=`, `?key=`, `?sig=`…). Remove the secret and try again.
 
@@ -73,13 +81,13 @@ A short tour opens on your first visit. Reopen it with **Take the tour** on Star
 
 ## Privacy in one paragraph
 
-Traces are processed in your browser and never uploaded. The only outside requests happen when you run a URL check: to Google if PageSpeed Insights is selected, and to the URL itself if the browser probe is selected. The site stores your imported traces for the current tab and a flag that you have seen the tour. No cookies, no analytics. Details: [PRIVACY.md](PRIVACY.md).
+Traces are processed in your browser and never uploaded. The only outside requests happen when you analyze a website: the address goes to Google PageSpeed Insights (through the TraceDetective analysis service on the main site), and to the address itself only if you choose the browser probe. The site stores your imported traces for the current tab and a flag that you have seen the tour. No cookies, no analytics. Details: [PRIVACY.md](PRIVACY.md).
 
 ## Limits to keep in mind
 
 - Insights are hypotheses with evidence, not proven causes. Confirm with logs, query plans or profiling.
 - Only instrumented work is visible. An uninstrumented service or queue can be the real cause.
-- URL checks measure from Google's locations or from your network, not from your users'.
+- Website analysis measures from Google's locations or from your network, not from your users'.
 - The demo traces are synthetic.
 
 ## Help and feedback
