@@ -36,6 +36,8 @@ export interface Deps {
 type ErrorCode = 'bad_request' | 'invalid_url' | 'forbidden_origin' | 'rate_limited' | 'busy' | 'quota' | 'lighthouse' | 'upstream' | 'timeout' | 'not_configured' | 'not_found' | 'method';
 
 const DEFAULT_TTL = 900;
+/** Bump when parsePsi's output changes shape. */
+const SUMMARY_VERSION = 'v2';
 const MAX_QUERY_LENGTH = 2300;
 
 function allowedOrigins(env: Env): string[] {
@@ -111,9 +113,12 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
 
   if (!env.PSI_API_KEY) return fail('not_configured', 'The analysis service is not configured yet.', 503, cors);
 
-  // Cached results do not count against the limits or Google's quota.
-  const cacheKey = new Request(`https://psi-cache.tracedetective.invalid/v1?${new URLSearchParams({ url: n.url, strategy }).toString()}`);
-  const hit = await deps.cache?.match(cacheKey);
+  // Cached results do not count against the limits or Google's quota. `fresh=1` (a rerun after
+  // a change) skips the cached copy but still counts against the limits. The key includes the
+  // summary format version, so results cached by an older version are not reused.
+  const fresh = url.searchParams.get('fresh') === '1';
+  const cacheKey = new Request(`https://psi-cache.tracedetective.invalid/${SUMMARY_VERSION}?${new URLSearchParams({ url: n.url, strategy }).toString()}`);
+  const hit = fresh ? undefined : await deps.cache?.match(cacheKey);
   if (hit) {
     const body = (await hit.json()) as Record<string, unknown>;
     return json({ ...body, cached: true }, 200, cors);

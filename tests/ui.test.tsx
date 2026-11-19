@@ -55,11 +55,13 @@ describe('onboarding', () => {
 
   it('shows the three start options with what each can and cannot do', () => {
     renderAt('/analyze');
-    for (const name of ['Analyze website', 'Upload trace', 'Explore demo']) {
+    for (const name of ['Analyze a website', 'Investigate a trace', 'Explore demo traces']) {
       expect(screen.getByRole('heading', { level: 2, name })).toBeInTheDocument();
     }
     expect(screen.getAllByText('It cannot')).toHaveLength(3);
-    expect(screen.getByRole('link', { name: 'Analyze a website' })).toHaveAttribute('href', '/analyze/url');
+    const main = screen.getByRole('main');
+    expect(within(main).getByRole('link', { name: 'Analyze a website' })).toHaveAttribute('href', '/analyze/url');
+    expect(within(main).getByText(/any public page URL, on any platform/)).toBeInTheDocument();
   });
 
   it('opens the walkthrough on the first visit, closes with Escape and remembers it', async () => {
@@ -114,7 +116,10 @@ describe('website analysis', () => {
   it('has no API key field and keeps device and browser probe under Advanced options', () => {
     renderAt('/analyze/url');
     expect(screen.queryByLabelText(/api key/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/api key/i)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('textbox')).toHaveLength(1);
+    expect(screen.getByText(/No\s+account, API key, files or plugin needed/)).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /wordpress/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Platform-specific notes' })).toHaveValue('');
     expect(screen.getByText('Advanced options')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Mobile/ })).toBeChecked();
     expect(screen.getByRole('radio', { name: /Desktop/ })).not.toBeChecked();
@@ -136,17 +141,17 @@ describe('website analysis', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderAt('/analyze/url');
     await analyze('example.com');
-    expect(await screen.findByRole('heading', { name: /Slow server response: 900 ms/ })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Server took 900 ms to start sending the page/ })).toBeInTheDocument();
     const called = new URL(String(fetchMock.mock.calls[0]![0]));
     expect(called.hostname).toBe('www.googleapis.com');
     expect(called.searchParams.get('url')).toBe('https://example.com/');
     expect(called.searchParams.has('key')).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1); // the browser probe is off by default
     expect(screen.getByRole('heading', { name: 'Lab test' })).toBeInTheDocument();
-    expect(screen.getByText('Lighthouse · simulated')).toBeInTheDocument();
+    expect(screen.getAllByText('Lighthouse · simulated').length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'Real users' })).toBeInTheDocument();
     expect(screen.getByText(/Google publishes real-user data only for pages and sites with enough Chrome visits/)).toBeInTheDocument();
-    expect(screen.getByText('72 / 100')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Performance score 72 out of 100' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export Report' })).toBeInTheDocument();
   });
 

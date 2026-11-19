@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { explainPsiError, isPublicHostname, normalizeUrl, parsePsi, psiRequestUrl, runBrowserProbe, summarizeProbe, urlFindings, type PsiSummary } from '../src/core';
+import { explainPsiError, isPublicHostname, normalizeUrl, parsePsi, psiRequestUrl, runBrowserProbe, summarizeProbe, buildFindings, type PsiSummary } from '../src/core';
 
 describe('normalizeUrl', () => {
   it('adds https:// and keeps paths and queries', () => {
@@ -130,18 +130,19 @@ describe('PageSpeed Insights', () => {
   });
 
   it('turns measurements into evidence-backed findings', () => {
-    const ids = urlFindings(parsePsi(SYNTHETIC_PSI), null).map((f) => f.id);
+    const ids = buildFindings(parsePsi(SYNTHETIC_PSI), null).map((f) => f.id);
     expect(ids).toEqual(expect.arrayContaining(['redirects', 'slow-server', 'lcp', 'weight', 'field']));
     expect(ids).not.toContain('tbt');
     expect(ids).not.toContain('cls');
-    const server = urlFindings(parsePsi(SYNTHETIC_PSI), null).find((f) => f.id === 'slow-server')!;
-    expect(server.evidence.join(' ')).toMatch(/1.24 s/);
-    expect(server.verifyNext.join(' ')).toMatch(/cannot see which code or query/);
+    const server = buildFindings(parsePsi(SYNTHETIC_PSI), null).find((f) => f.id === 'slow-server')!;
+    expect(server.measured).toMatch(/1.24 s/);
+    expect(server.stage).toBe('Server response');
+    expect(server.platformNotes).toBeUndefined();
   });
 
   it('reports HTTP errors from the main document', () => {
     const p: PsiSummary = { ...parsePsi(SYNTHETIC_PSI), mainDocument: { url: 'https://x.test/', statusCode: 503 } };
-    expect(urlFindings(p, null)[0]).toMatchObject({ id: 'http-error', severity: 'high' });
+    expect(buildFindings(p, null)[0]).toMatchObject({ id: 'http-error', severity: 'high' });
   });
 
   it('explains quota, Lighthouse, timeout and network failures', () => {
@@ -172,7 +173,7 @@ describe('browser probe', () => {
     expect(r.medianMs).toBe(100);
     expect(r.repeatMedianMs).toBe(95);
     expect(r.breakdownAvailable).toBe(false);
-    expect(urlFindings(null, r).map((f) => f.id)).toEqual(['cold-connection']);
+    expect(buildFindings(null, r).map((f) => f.id)).toEqual(['cold-connection']);
   });
 
   it('adds a DNS/TLS breakdown only when the server allows it (Timing-Allow-Origin)', async () => {
@@ -189,7 +190,7 @@ describe('browser probe', () => {
     expect(r.successful).toBe(0);
     expect(r.samples[0]!.error).toMatch(/Request failed/);
     expect(r.samples[1]!.error).toMatch(/within 5 s/);
-    expect(urlFindings(null, r)[0]!.id).toBe('probe-failed');
+    expect(buildFindings(null, r)[0]!.id).toBe('probe-failed');
   });
 
   it('aborts a request that exceeds the timeout', async () => {
@@ -204,7 +205,7 @@ describe('browser probe', () => {
 
   it('summarises empty input safely', () => {
     expect(summarizeProbe([])).toMatchObject({ successful: 0, medianMs: undefined });
-    expect(urlFindings(null, null)).toEqual([]);
+    expect(buildFindings(null, null)).toEqual([]);
   });
 });
 

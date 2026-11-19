@@ -6,7 +6,7 @@ import { PageHeader, useDocumentTitle } from '../ui';
 
 const SECTIONS = [
   ['quick-start', 'Quick start'],
-  ['url-check', 'Website analysis'],
+  ['url-check', 'Analyze a website'],
   ['otlp', 'OpenTelemetry import'],
   ['schema', 'JSON schema'],
   ['timing', 'How timing is calculated'],
@@ -73,7 +73,7 @@ export function Docs() {
 
         <Section id="quick-start" title="Quick start">
           <ol>
-            <li>Go to <Link to="/analyze">Start analysis</Link> and pick a mode: check a public URL, import your own trace, or open an <Link to="/examples">example trace</Link>.</li>
+            <li>Paste a public URL on the <Link to="/">home page</Link> or in <Link to="/analyze/url">Analyze a website</Link>. If your application records traces, <Link to="/analyze/upload">investigate a trace</Link>, or open an <Link to="/examples">example trace</Link>.</li>
             <li>In the timeline, select a span with the mouse or move through spans with the arrow keys. Details and related insights update as you go.</li>
             <li>Read the insights. Each one lists the evidence, other explanations to consider and what to verify next.</li>
             <li>Compare against a healthy trace of the same endpoint on the <Link to="/compare">Compare</Link> page.</li>
@@ -82,10 +82,10 @@ export function Docs() {
           <p>To run it yourself: <code>npm install</code>, then <code>npm run dev</code>. <code>npm test</code> runs the test suite and <code>npm run build</code> produces a static site in <code>dist/</code>.</p>
         </Section>
 
-        <Section id="url-check" title="Website analysis">
+        <Section id="url-check" title="Analyze a website">
           <p>
-            <Link to="/analyze/url">Website analysis</Link> measures a public website from outside. Enter the address and choose Analyze Website. There is no
-            account, registration or API key.
+            <Link to="/analyze/url">Analyze a website</Link> checks what a visitor’s browser can observe in a page load, for any public website, whatever it is built
+            with. Paste the address, choose Mobile or Desktop and press Analyze Website. There is no account, registration, API key, plugin or file to upload.
           </p>
           <ul>
             <li>
@@ -111,19 +111,44 @@ export function Docs() {
             When a test fails, the page says why (quota used up, too many tests, timeout, page could not be loaded) and offers to try again, open the same test on
             the PageSpeed Insights website, or run the browser probe. It never shows empty or made-up numbers.
           </p>
+          <p>The report shows, when PageSpeed returns them:</p>
+          <ul>
+            <li>
+              <strong>Where the time went.</strong> The LCP time split into server response (time to first byte), resource discovery (load delay), resource download
+              (load duration) and rendering (render delay), plus Total Blocking Time for main-thread work. The split is Lighthouse’s own, labelled as a lab estimate.
+            </li>
+            <li>
+              <strong>Visuals.</strong> The final screenshot, the loading filmstrip and a request waterfall with type, size, status and timing. Waterfall and
+              filmstrip times are as observed before Lighthouse simulated a slow connection, so use them for order and size.
+            </li>
+            <li>
+              <strong>The LCP element</strong>, with its selector and HTML. Its file is named only when the response ties it to the element: an image audit that
+              lists the same element, the LCP preload audit, or the element’s <code>src</code> matching a request. The basis is shown.
+            </li>
+            <li>
+              <strong>Findings</strong>, ranked by severity and then by PageSpeed’s own estimate of time at stake. Each states the measurement, its source, the loading
+              stage it concerns, why it may matter, a next step, and possible causes as hypotheses. Findings appear only when a value crosses a published threshold
+              (server response over 600 ms, LCP over 2.5 s, TBT over 200 ms, CLS over 0.1, more than 1.6 MB transferred) or a PageSpeed check fails.
+            </li>
+            <li>
+              <strong>Platform.</strong> A platform is named only when files from its own locations appear in the request list (WordPress, Elementor, Shopify,
+              Next.js, Nuxt, Drupal, Squarespace, Wix, Webflow), and the method and an example file are shown. Advice is platform-neutral unless a platform is
+              detected or chosen under Advanced options.
+            </li>
+          </ul>
           <p>
             Input is normalised (https:// is added, fragments are removed) and refused when it has credentials, a secret-looking query parameter, or a local,
-            private-network, link-local or internal host. Findings appear only when a measured value crosses a published threshold: server response over 600 ms,
-            LCP over 2.5 s, TBT over 200 ms, CLS over 0.1, more than 1.6 MB transferred, a redirect chain, an HTTP error, or a cold first request much slower than repeats.
+            private-network, link-local or internal host.
           </p>
           <p>
-            An external check cannot see inside the server. It never reports database, query, cache or code-level causes. Use it to decide whether a problem is
-            the network, the server response, or the page itself, then import a trace to see inside the server.
+            A public URL can show browser-visible delays, but it cannot identify an internal database query or code function, and the report never names one as a
+            cause. Those details require an instrumented trace. Use the report to decide whether the time goes to the server response, loading files, rendering or
+            scripts, then <Link to="/analyze/upload">investigate a trace</Link> if your application records one. TraceDetective never asks for source code.
           </p>
         </Section>
 
         <Section id="otlp" title="OpenTelemetry import">
-          <p>The Upload tab accepts OpenTelemetry trace data directly:</p>
+          <p>Investigate a trace accepts OpenTelemetry trace data directly:</p>
           <ul>
             <li>OTLP/JSON with a top-level <code>resourceSpans</code> array, including the older <code>instrumentationLibrarySpans</code> key.</li>
             <li>OpenTelemetry Collector file exporter output: one OTLP JSON request per line. The lines are merged.</li>
@@ -213,11 +238,11 @@ export function Docs() {
         <Section id="privacy" title="Privacy">
           <ul>
             <li>Traces are parsed and analysed in your browser. They are never sent to a server.</li>
-            <li>Imported traces are kept in this browser tab’s session storage so a reload does not lose them. Closing the tab clears them, and you can remove them sooner on the Upload tab.</li>
+            <li>Imported traces are kept in this browser tab’s session storage so a reload does not lose them. Closing the tab clears them, and you can remove them sooner on the Investigate a trace page.</li>
             <li>Attribute values whose keys look sensitive (password, secret, token, authorization, cookie, API key, session, credential) are replaced with “[redacted]” on import.</li>
             <li>Website analysis sends the address you enter to Google PageSpeed Insights (Google’s privacy policy applies){SITE.psiProxyUrl ? ', through the TraceDetective analysis service. The service uses your IP address only to count tests per minute, keeps each result for 15 minutes so repeat tests are fast, and writes no request logs' : ''}. You never enter an API key.</li>
             <li>The optional browser probe sends requests from your browser to the address you enter, without cookies or a referrer.</li>
-            <li>The only thing stored on your device besides imported traces is a flag that you have seen the walkthrough (local storage).</li>
+            <li>The only thing stored on your device besides imported traces is a flag that you have seen the walkthrough (local storage). Website reports are not stored; the share link holds only the address and options.</li>
             <li>The site has no login, no ads, no cookies and no analytics.</li>
             <li>Still, remove secrets and personal data from traces before importing or sharing reports.</li>
           </ul>

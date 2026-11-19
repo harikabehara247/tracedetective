@@ -6,6 +6,8 @@
  * browser and again in the proxy, so private and local targets are refused before anything runs.
  */
 
+import { parseLabExtras, type LcpInfo, type NetRequest, type PsiInsight, type Screenshot } from './website';
+
 export type NormalizeResult = { ok: true; url: string; host: string; notes: string[] } | { ok: false; error: string };
 
 const MAX_URL_LENGTH = 2048;
@@ -115,7 +117,16 @@ export interface PsiSummary {
   requestCount?: number;
   performanceScore?: number;
   audits: Record<string, { score: number | null; displayValue?: string; title?: string }>;
-  field: { scope: 'url' | 'origin'; overall?: string; metrics: FieldMetric[] } | null;
+  /** `period` is set only when the response includes CrUX's collection period. */
+  field: { scope: 'url' | 'origin'; overall?: string; metrics: FieldMetric[]; period?: { first: string; last: string } } | null;
+  // Added in 0.4.0. Optional, because an older analysis service may not return them.
+  ttfbMs?: number;
+  screenshot?: Screenshot;
+  filmstrip?: Screenshot[];
+  viewport?: { width: number; height: number };
+  requests?: NetRequest[];
+  lcp?: LcpInfo;
+  insights?: PsiInsight[];
 }
 
 type Json = Record<string, unknown>;
@@ -143,7 +154,14 @@ function parseField(exp: Json, scope: 'url' | 'origin'): PsiSummary['field'] {
     list.push({ key, label, percentile: p, unit, category: str(m.category) });
   }
   if (list.length === 0) return null;
-  return { scope, overall: str(exp.overall_category) || undefined, metrics: list };
+  const day = (d: unknown) => {
+    const o = obj(d);
+    const [y, m, dd] = [num(o.year), num(o.month), num(o.day)];
+    return y && m && dd ? `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}` : undefined;
+  };
+  const cp = obj(exp.collectionPeriod);
+  const [first, last] = [day(cp.firstDate), day(cp.lastDate)];
+  return { scope, overall: str(exp.overall_category) || undefined, metrics: list, ...(first && last ? { period: { first, last } } : {}) };
 }
 
 /** Extract the parts of a PSI v5 response that TraceDetective reports. Never throws. */
@@ -171,6 +189,8 @@ export function parsePsi(json: unknown): PsiSummary {
   const urlField = parseField(obj(root.loadingExperience), 'url');
   const originField = urlField ? null : parseField(obj(root.originLoadingExperience), 'origin');
   const perf = num(obj(obj(lh.categories).performance).score);
+  const lcpMs = num(audit('largest-contentful-paint').numericValue);
+  const extras = parseLabExtras(lh, finalUrl, lcpMs);
 
   return {
     requestedUrl: str(lh.requestedUrl) || str(root.id),
@@ -187,7 +207,7 @@ export function parsePsi(json: unknown): PsiSummary {
     redirects: items('redirects').map(obj).map((r) => ({ url: str(r.url), wastedMs: num(r.wastedMs) ?? 0 })),
     serverResponseMs: num(audit('server-response-time').numericValue),
     fcpMs: num(audit('first-contentful-paint').numericValue),
-    lcpMs: num(audit('largest-contentful-paint').numericValue),
+    lcpMs,
     tbtMs: num(audit('total-blocking-time').numericValue),
     cls: num(audit('cumulative-layout-shift').numericValue),
     speedIndexMs: num(audit('speed-index').numericValue),
@@ -196,6 +216,7 @@ export function parsePsi(json: unknown): PsiSummary {
     performanceScore: perf,
     audits: auditSummary,
     field: urlField ?? originField,
+    ...extras,
   };
 }
 
@@ -340,82 +361,6 @@ export async function runBrowserProbe(url: string, count = 5, timeoutMs = 10_000
     onSample?.(sample);
   }
   return summarizeProbe(samples);
-}
-
-// ---------------------------------------------------------------------------
-// Findings from external measurements
-// ---------------------------------------------------------------------------
-
-export interface UrlFinding {
-  id: string;
-  severity: 'high' | 'medium' | 'low' | 'info';
-  title: string;
-  evidence: string[];
-  verifyNext: string[];
-  /** lab = Lighthouse simulated load, field = Chrome UX Report real users, probe = this browser. */
-  source: 'Lighthouse lab test' | 'Chrome real-user data' | 'Browser probe';
-}
-
-const fmt = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${Math.round(ms)} ms`);
-const kb = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(2)} MB` : `${Math.round(b / 1024)} KB`);
-
-/** Thresholds follow Lighthouse audits and Core Web Vitals "good" boundaries. */
-export const URL_THRESHOLDS = { serverResponseMs: 600, lcpMs: 2500, cls: 0.1, tbtMs: 200, pageBytes: 1600 * 1024 } as const;
-
-export function urlFindings(psi: PsiSummary | null, probe: ProbeSummary | null): UrlFinding[] {
-  const out: UrlFinding[] = [];
-  if (psi) {
-    const status = psi.mainDocument?.statusCode;
-    if (status !== undefined && status >= 400) {
-      out.push({ id: 'http-error', severity: 'high', source: 'Lighthouse lab test', title: `The page returned HTTP ${status}`, evidence: [`Main document ${psi.mainDocument?.url}: status ${status}`], verifyNext: ['Open the URL yourself and check server or CDN error logs for this time.'] });
-    }
-    if (psi.redirects.length > 1 || (psi.redirects.length === 1 && psi.redirects[0]!.wastedMs > 0)) {
-      const wasted = psi.redirects.reduce((s, r) => s + r.wastedMs, 0);
-      out.push({
-        id: 'redirects', severity: wasted >= 300 ? 'medium' : 'low', source: 'Lighthouse lab test',
-        title: `${Math.max(psi.redirects.length - 1, 1)} redirect${psi.redirects.length > 2 ? 's' : ''} before the page loads`,
-        evidence: [...psi.redirects.map((r) => `${r.url}${r.wastedMs ? ` (+${fmt(r.wastedMs)})` : ''}`), `Lighthouse estimates ${fmt(wasted)} spent on redirects.`],
-        verifyNext: ['Link directly to the final URL (protocol, www and trailing slash) in menus, sitemaps and ads.'],
-      });
-    }
-    if (psi.serverResponseMs !== undefined && psi.serverResponseMs > URL_THRESHOLDS.serverResponseMs) {
-      out.push({
-        id: 'slow-server', severity: psi.serverResponseMs > 1800 ? 'high' : 'medium', source: 'Lighthouse lab test',
-        title: `Slow server response: ${fmt(psi.serverResponseMs)} for the main document`,
-        evidence: [`Lighthouse "server response time" ${fmt(psi.serverResponseMs)} (audit fails above ${URL_THRESHOLDS.serverResponseMs} ms).`, 'Measured from Google’s data centre, not from your users’ locations.'],
-        verifyNext: ['Check whether full-page caching is active for this URL.', 'Profile the backend for this request (application logs, APM traces, slow-query log). An external test cannot see which code or query is slow.'],
-      });
-    }
-    if (psi.lcpMs !== undefined && psi.lcpMs > URL_THRESHOLDS.lcpMs) {
-      out.push({ id: 'lcp', severity: psi.lcpMs > 4000 ? 'high' : 'medium', source: 'Lighthouse lab test', title: `Largest Contentful Paint ${fmt(psi.lcpMs)} in the lab test`, evidence: [`Lab LCP ${fmt(psi.lcpMs)} (${psi.formFactor || 'unknown'} profile; good is ≤ 2.5 s).`], verifyNext: ['Check which element is the LCP element in the full PageSpeed report and whether it is a large image or late-loading resource.'] });
-    }
-    if (psi.tbtMs !== undefined && psi.tbtMs > URL_THRESHOLDS.tbtMs) {
-      out.push({ id: 'tbt', severity: psi.tbtMs > 600 ? 'medium' : 'low', source: 'Lighthouse lab test', title: `Main thread blocked for ${fmt(psi.tbtMs)}`, evidence: [`Total Blocking Time ${fmt(psi.tbtMs)} (good is ≤ 200 ms).`], verifyNext: ['Look at the "Reduce JavaScript execution time" and "unused JavaScript" items in the full report.'] });
-    }
-    if (psi.cls !== undefined && psi.cls > URL_THRESHOLDS.cls) {
-      out.push({ id: 'cls', severity: psi.cls > 0.25 ? 'medium' : 'low', source: 'Lighthouse lab test', title: `Layout shifts while loading (CLS ${psi.cls.toFixed(2)})`, evidence: [`Cumulative Layout Shift ${psi.cls.toFixed(3)} (good is ≤ 0.1).`], verifyNext: ['Give images, ads and embeds explicit width and height.'] });
-    }
-    if (psi.totalBytes !== undefined && psi.totalBytes > URL_THRESHOLDS.pageBytes) {
-      out.push({ id: 'weight', severity: 'low', source: 'Lighthouse lab test', title: `Heavy page: ${kb(psi.totalBytes)} transferred`, evidence: [`Total transfer ${kb(psi.totalBytes)} across ${psi.requestCount ?? '?'} requests.`], verifyNext: ['Check image formats and sizes, and unused JavaScript and CSS.'] });
-    }
-    if (psi.field) {
-      const poor = psi.field.metrics.filter((m) => m.category === 'SLOW' || m.category === 'POOR' || m.category === 'AVERAGE' || m.category === 'NEEDS_IMPROVEMENT');
-      if (poor.length) {
-        out.push({ id: 'field', severity: 'medium', source: 'Chrome real-user data', title: `Real-user data (${psi.field.scope === 'url' ? 'this URL' : 'whole site'}) shows metrics that need improvement`, evidence: poor.map((m) => `${m.label}: ${m.unit === 'ms' ? fmt(m.percentile) : m.percentile.toFixed(2)} (${m.category.toLowerCase().replace('_', ' ')})`), verifyNext: ['Field data is a 28-day rolling Chrome UX Report window; check again after changes have been live for a few weeks.'] });
-      }
-    }
-  }
-  if (probe) {
-    if (probe.successful === 0 && probe.samples.length) {
-      out.push({ id: 'probe-failed', severity: 'high', source: 'Browser probe', title: 'Your browser could not reach the URL', evidence: probe.samples.map((s) => `Attempt ${s.attempt}: ${s.error ?? 'failed'}`), verifyNext: ['Open the URL directly. If it loads there, an extension or the site’s security settings may block background requests.'] });
-    } else if (probe.firstMs !== undefined && probe.repeatMedianMs !== undefined && probe.firstMs > probe.repeatMedianMs * 2 && probe.firstMs - probe.repeatMedianMs > 150) {
-      out.push({ id: 'cold-connection', severity: 'info', source: 'Browser probe', title: `First request was ${fmt(probe.firstMs - probe.repeatMedianMs)} slower than repeats`, evidence: [`First request ${fmt(probe.firstMs)}; median of repeats ${fmt(probe.repeatMedianMs)}.`, 'The first request usually includes DNS lookup and connection setup; repeats reuse the connection.'], verifyNext: ['Consider preconnect hints or a CDN closer to your users if first visits matter.'] });
-    }
-  }
-  if (out.length === 0 && (psi || probe)) {
-    out.push({ id: 'none', severity: 'info', source: psi ? 'Lighthouse lab test' : 'Browser probe', title: 'No problems crossed the reporting thresholds', evidence: ['All measured values are within the thresholds listed under Methodology.'], verifyNext: ['One test is one sample. Repeat at different times of day before drawing conclusions.'] });
-  }
-  return out;
 }
 
 // ---------------------------------------------------------------------------

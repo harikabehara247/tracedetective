@@ -102,8 +102,14 @@ export function convertOtlp(json: unknown, options: { traceId?: string } = {}): 
   const warnings: ValidationIssue[] = [];
   let skipped = 0;
   let droppedAttrs = 0;
+  // Files marked tracedetective.synthetic = true on every resource (the downloadable samples)
+  // stay labelled as synthetic after import.
+  let resources = 0;
+  let syntheticResources = 0;
   for (const rs of unwrapOtlp(json) ?? []) {
     const resAttrs = attributes(obj(obj(rs).resource).attributes);
+    resources++;
+    if (resAttrs['tracedetective.synthetic'] === true) syntheticResources++;
     const service = typeof resAttrs['service.name'] === 'string' && (resAttrs['service.name'] as string).trim() ? (resAttrs['service.name'] as string) : 'unknown_service';
     const scopes = [...arr(obj(rs).scopeSpans), ...arr(obj(rs).instrumentationLibrarySpans)];
     for (const ss of scopes) {
@@ -170,8 +176,8 @@ export function convertOtlp(json: unknown, options: { traceId?: string } = {}): 
       schemaVersion: '1.0',
       traceId,
       name: clip(root ? `${root.service} · ${root.name}` : `Trace ${traceId}`, MAX_LABEL),
-      description: 'Imported from OpenTelemetry OTLP JSON.',
-      synthetic: false,
+      description: resources > 0 && syntheticResources === resources ? 'Synthetic TraceDetective sample in OpenTelemetry OTLP JSON form.' : 'Imported from OpenTelemetry OTLP JSON.',
+      synthetic: resources > 0 && syntheticResources === resources,
       spans: selected,
     },
   };

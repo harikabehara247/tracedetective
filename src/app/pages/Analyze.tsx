@@ -9,32 +9,38 @@ import { UrlCheck } from './UrlCheck';
 import { openTour } from '../components/Tour';
 
 const MODES = [
-  { id: 'url', label: 'Analyze website' },
-  { id: 'upload', label: 'Upload trace' },
-  { id: 'demo', label: 'Explore demo' },
+  { id: 'url', label: 'Analyze a website' },
+  { id: 'upload', label: 'Investigate a trace' },
+  { id: 'demo', label: 'Explore demo traces' },
 ] as const;
+
+const HEADERS: Record<string, [string, string]> = {
+  url: ['Analyze a website', 'Paste a page URL. Get a visual performance report and the next things to check. No files or setup needed.'],
+  upload: ['Investigate a trace', 'Optional and more advanced: see where one request spent its time inside your application.'],
+  demo: ['Explore demo traces', 'Synthetic traces that show what trace analysis looks like. No download needed.'],
+  sdk: ['Instrumentation guide', 'How to get a trace out of your own service.'],
+};
 
 const OPTIONS = [
   {
     id: 'url',
-    title: 'Analyze website',
-    when: 'You have a public website or API endpoint and want to know how fast it responds.',
-    can: ['HTTP status, final URL and redirects', 'Server response time and page-load metrics (LCP, CLS, TBT)', 'Real-user Chrome data when Google has it', 'Optional: response times from your own browser'],
-    cannot: ['See inside the server: no database, query or function timing', 'Check local, private-network or login-protected pages'],
-    // No account, registration or API key is needed.
+    title: 'Analyze a website',
+    when: 'Start here. Paste any public page URL, on any platform. It checks what a visitor’s browser can observe in a page load. No account, API key, files or plugin.',
+    can: ['How the page performed on mobile and desktop', 'Where the time went: server response, resource loading, rendering and main-thread work', 'A screenshot, the loading sequence and every request', 'A short, ranked list of what to check first, with the evidence for each'],
+    cannot: ['See inside the server: no code, function or database query timing', 'Check local, private-network or login-protected pages'],
     cta: 'Analyze a website',
   },
   {
     id: 'upload',
-    title: 'Upload trace',
-    when: 'You have a distributed trace from OpenTelemetry or another tracer.',
+    title: 'Investigate a trace',
+    when: 'Advanced: you already have a trace (a timed record of one request) from OpenTelemetry or a tracing tool.',
     can: ['Waterfall, span tree and critical path', 'Self time with concurrency handled correctly', 'Insights on slow database and external calls, errors and gaps', 'Compare against another trace'],
     cannot: ['Collect traces for you: export one first (OTLP JSON or TraceDetective JSON)', 'Receive live telemetry from an agent'],
-    cta: 'Import a trace',
+    cta: 'Investigate a trace',
   },
   {
     id: 'demo',
-    title: 'Explore demo',
+    title: 'Explore demo traces',
     when: 'You want to see what TraceDetective does before using your own data.',
     can: ['Four ready-made traces: healthy, slow database, slow external API, failing dependency', 'Every feature works on them, including compare and export'],
     cannot: ['Describe a real system: the demo traces are synthetic and labelled as such'],
@@ -49,11 +55,10 @@ export function Analyze() {
   useDocumentTitle(mode === undefined ? 'Start analysis' : isGuide ? 'Instrumentation guide' : current ? current.label : 'Not found');
   if (mode !== undefined && !current && !isGuide) return <NotFound />;
   if (mode === undefined) return <StartAnalysis />;
+  const [title, intro] = HEADERS[mode]!;
   return (
     <div>
-      <PageHeader title={isGuide ? 'Instrumentation guide' : 'Start analysis'}>
-        {isGuide ? 'How to get a trace out of your own service.' : 'Each mode says exactly what it can and cannot tell you.'}
-      </PageHeader>
+      <PageHeader title={title}>{intro}</PageHeader>
       <nav aria-label="Analysis modes" className="mb-6 overflow-x-auto">
         <ul className="flex min-w-max gap-1 rounded-xl border border-line bg-surface p-1">
           {MODES.map((m) => (
@@ -105,8 +110,8 @@ function StartAnalysis() {
         ))}
       </div>
       <p className="mt-6 text-sm text-muted">
-        Not sure? Slow page in the browser: start with the URL check. Slow API and you can see your service: upload a trace.{' '}
-        <Link to="/analyze/sdk">How to export a trace</Link>
+        Not sure? Start with Analyze a website. It needs only a URL. Trace investigation is for when your application already records traces.{' '}
+        <Link to="/analyze/sdk">How to get a trace</Link>
       </p>
     </div>
   );
@@ -184,6 +189,8 @@ function UploadMode() {
   const example = SAMPLES[0]!.data;
 
   return (
+    <div className="space-y-6">
+    <TraceIntro />
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="space-y-6">
         <Card>
@@ -320,6 +327,120 @@ function UploadMode() {
         </Card>
       </aside>
     </div>
+    </div>
+  );
+}
+
+const SAMPLE_FILE = 'samples/tracedetective-sample-slow-database.otlp.json';
+
+/** Plain-language introduction: what a trace is, a picture, and how to get one. */
+function TraceIntro() {
+  const steps = [
+    { label: 'Web server', service: 'frontend service', start: 0, ms: 40, color: 'var(--color-cyan)' },
+    { label: 'Application code', service: 'checkout service', start: 40, ms: 120, color: 'var(--color-violet)' },
+    { label: 'Database query', service: 'orders database', start: 70, ms: 650, color: 'var(--color-warn)' },
+    { label: 'External API', service: 'payment provider', start: 730, ms: 90, color: 'var(--color-teal)' },
+  ];
+  const total = 830;
+  const x = (ms: number) => 150 + (ms / total) * 460;
+  return (
+    <Card aria-labelledby="trace-intro-h">
+      <h2 id="trace-intro-h" className="text-lg font-semibold">
+        What is a trace?
+      </h2>
+      <p className="mt-2 max-w-3xl text-lg">
+        A trace is a timed record of one request moving through an application and its services. It can show which measured steps took time.
+      </p>
+      <figure className="mt-4">
+        <svg viewBox="0 0 640 170" className="w-full max-w-3xl" role="img" aria-labelledby="trace-fig-t trace-fig-d">
+          <title id="trace-fig-t">Illustration of one request as a trace</title>
+          <desc id="trace-fig-d">
+            One page request takes 830 ms. The web server starts it, application code runs for 120 ms, a database query takes 650 ms, and an external API call takes 90 ms. The
+            database query is where most of the time went.
+          </desc>
+          <rect x="150" y="8" width="460" height="22" rx="4" fill="var(--color-surface-2)" stroke="var(--color-line)" />
+          <text x="10" y="24" fontSize="12" fill="var(--color-ink)">GET /checkout</text>
+          <text x="604" y="23" fontSize="11" textAnchor="end" fill="var(--color-muted)">830 ms in total</text>
+          {steps.map((st, i) => (
+            <g key={st.label}>
+              <text x="10" y={58 + i * 30} fontSize="12" fill="var(--color-ink)">
+                {st.label}
+              </text>
+              <text x="10" y={70 + i * 30} fontSize="10" fill="var(--color-muted)">
+                {st.service}
+              </text>
+              <rect x={x(st.start)} y={46 + i * 30} width={Math.max(4, x(st.start + st.ms) - x(st.start))} height="18" rx="3" fill={st.color} />
+              <text x={x(st.start + st.ms) + 6 > 560 ? x(st.start) - 6 : x(st.start + st.ms) + 6} y={59 + i * 30} fontSize="11" fill="var(--color-ink)" textAnchor={x(st.start + st.ms) + 6 > 560 ? 'end' : 'start'}>
+                {st.ms} ms
+              </text>
+            </g>
+          ))}
+        </svg>
+        <figcaption className="mt-1 text-xs text-muted">Illustration with made-up numbers: in this request, most of the time went to one database query.</figcaption>
+      </figure>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <ButtonLink to={`/trace/${sampleTraceId('slow-database')}`} variant="primary">
+          Open a synthetic sample
+        </ButtonLink>
+        <a
+          href={`${import.meta.env.BASE_URL}${SAMPLE_FILE}`}
+          download
+          className="inline-flex items-center rounded-lg border border-line bg-surface-2 px-4 py-2 text-sm font-semibold text-ink no-underline hover:border-cyan hover:no-underline"
+        >
+          Download sample trace (synthetic, OTLP JSON)
+        </a>
+      </div>
+      <p className="mt-2 text-xs text-muted">Both are the same made-up “slow database query” request. They are labelled synthetic and are not measurements of a real system.</p>
+
+      <div className="mt-5 grid gap-4 text-sm md:grid-cols-3">
+        <div>
+          <h3 className="font-semibold">File formats it reads</h3>
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-muted">
+            <li>
+              <strong className="text-ink">OTLP/JSON</strong>: OpenTelemetry’s standard JSON, with a top-level <code>resourceSpans</code> list.
+            </li>
+            <li>
+              <strong className="text-ink">Collector JSON Lines</strong>: the OpenTelemetry Collector file exporter writes one OTLP/JSON object per line. Upload the file as it is.
+            </li>
+            <li>
+              <strong className="text-ink">Grafana Tempo</strong>: save the response of <code>/api/traces/&lt;trace id&gt;</code> or <code>/api/v2/traces/&lt;trace id&gt;</code>.
+            </li>
+          </ul>
+          <Link to="/analyze/sdk" className="mt-1 inline-block">
+            Step-by-step export guide
+          </Link>
+        </div>
+        <div>
+          <h3 className="font-semibold">Getting a trace</h3>
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-muted">
+            <li>
+              Your application must record traces. Most sites and frameworks do not do this by default; add OpenTelemetry (SDKs and automatic instrumentation exist for Node.js,
+              Python, Java, .NET, Go, PHP, Ruby and others) or turn on tracing in your monitoring tool.
+            </li>
+            <li>
+              <strong className="text-ink">OpenTelemetry Collector</strong>: add the file exporter and upload the file it writes.
+            </li>
+            <li>
+              <strong className="text-ink">Grafana Tempo</strong>: save the API response for one trace id.
+            </li>
+            <li>
+              <strong className="text-ink">Jaeger, Zipkin or a commercial APM</strong>: their own export formats are not read directly. If they receive OpenTelemetry data,
+              also send it to a Collector with the file exporter.
+            </li>
+          </ul>
+          <p className="mt-2 text-muted">
+            A trace is never needed for <Link to="/analyze/url">Analyze a website</Link>.
+          </p>
+        </div>
+        <div>
+          <h3 className="font-semibold">Privacy</h3>
+          <p className="mt-1 text-muted">
+            Imported traces are analysed in your browser and are not uploaded anywhere. They are kept in this tab’s session storage until you close the tab or remove them.
+            Sensitive-looking attributes are redacted on import, but remove secrets and personal data first. Only the trace file is needed, never source code.
+          </p>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -347,7 +468,7 @@ function SdkMode() {
         <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm">
           <li>Instrument your service with OpenTelemetry. Official SDKs exist for most languages.</li>
           <li>Export the slow request as OTLP JSON, using one of the options below.</li>
-          <li>Remove anything sensitive from attributes, then import the file on the <Link to="/analyze/upload">Upload trace</Link> tab.</li>
+          <li>Remove anything sensitive from attributes, then import the file on the <Link to="/analyze/upload">Investigate a trace</Link> tab.</li>
         </ol>
       </Card>
       <Card>

@@ -45,13 +45,15 @@ async function analyze(page: import('@playwright/test').Page, url: string) {
   await page.getByRole('button', { name: 'Analyze Website' }).click();
 }
 
-test('asks only for a URL: no API key, device and probe under Advanced options', async ({ page }) => {
+test('asks only for a URL and a device: no API key, platform and probe under Advanced options', async ({ page }) => {
   await page.goto('analyze/url');
   await expect(page.getByRole('button', { name: 'Analyze Website' })).toBeVisible();
-  await expect(page.getByText(/api key/i)).toHaveCount(0);
-  await expect(page.getByRole('radio', { name: /Desktop/ })).toBeHidden();
-  await page.getByText('Advanced options').click();
+  await expect(page.getByRole('textbox')).toHaveCount(1);
+  await expect(page.getByLabel(/api key/i)).toHaveCount(0);
   await expect(page.getByRole('radio', { name: /Mobile/ })).toBeChecked();
+  await expect(page.getByRole('combobox', { name: 'Platform-specific notes' })).toBeHidden();
+  await page.getByText('Advanced options').click();
+  await expect(page.getByRole('combobox', { name: 'Platform-specific notes' })).toHaveValue('');
   await expect(page.getByRole('checkbox', { name: /time the site from my browser/ })).not.toBeChecked();
 });
 
@@ -60,10 +62,10 @@ test('analyzes a website, separates lab and real-user data, and exports a report
   const outside: string[] = [];
   page.on('request', (r) => { if (/^https?:\/\/example\.com/.test(r.url())) outside.push(r.url()); });
   await analyze(page, 'example.com');
-  await expect(page.getByRole('heading', { name: /Slow server response: 1.34 s/ })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /Server took 1.34 s to start sending the page/ })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('heading', { name: /redirect/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lab test', exact: true })).toBeVisible();
-  await expect(page.getByText('Lighthouse · simulated')).toBeVisible();
+  await expect(page.getByText('Lighthouse · simulated').first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Real users', exact: true })).toBeVisible();
   await expect(page.getByText(/Google publishes real-user data only/)).toBeVisible();
   await expect(page.getByText('How these numbers were measured')).toBeVisible();

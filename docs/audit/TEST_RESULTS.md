@@ -82,3 +82,24 @@ Firefox and WebKit fixes (L3–L5) can only be confirmed by the next live run.
 | `wrangler deploy --dry-run` (4.165.0) | Bundles (13.6 KiB); rate-limit bindings and variables recognised |
 
 Not yet run: the Worker deployed on Cloudflare with a real key, the real analysis in the live workflow, and Firefox/WebKit. These run in "Deploy analysis service" and "Live site checks" after merge.
+
+## 0.4.0 candidate local run (19 Nov 2026)
+
+Branch `url-first-report`, Node.js 22, development container (Linux x64), Chromium only.
+
+| Suite | Command | Result |
+| --- | --- | --- |
+| Type check | `npm run typecheck` | Pass, 0 errors |
+| Unit and component (Vitest 5, jsdom) | `npm test` | **175 passed**, 0 failed (9 files). New: `tests/website.test.ts` (17), `tests/website-report.test.tsx` (13), plus worker `fresh=1`/cache version and OTLP sample tests |
+| Production build | `npm run build:pages` | Pass. JS 572 KB (172 KB gzip), CSS 34 KB. 404.html plus 14 route pages |
+| Browser tests, local preview (Playwright, Chromium) | `npx playwright test --trace off` | **83 passed**, 4 skipped, 0 failed (desktop 1440×900, tablet 768×1024, Pixel 7) |
+| Browser tests, GitHub Pages simulation at `/tracedetective/` | `BASE_URL=http://localhost:4174/tracedetective/ npx playwright test --retries 0` | **83 passed**, 4 skipped, 0 failed |
+| Accessibility (axe-core, WCAG 2.1 A/AA, serious + critical) | part of the browser tests, now including a full website report | 0 violations |
+| Analysis service bundle | `npx wrangler@4.165.0 deploy --dry-run` in `worker/` | Pass, 24.21 KiB (8.21 KiB gzip) |
+| Dependency audit | `npm audit` | 0 vulnerabilities |
+
+Skipped: the live PageSpeed test (3 viewports; it runs only against a deployed site) and the mobile-menu test on the desktop viewport (no menu button by design).
+
+One earlier Pages-simulation run reported the skip-link test as flaky (passed on retry; 2 failures in 15 repeats). Cause: the test pressed Tab before the app had rendered. The test now waits for the page heading first; 30 of 30 repeats then passed. No test was skipped or disabled.
+
+Website report data in these tests comes from synthetic fixtures: real Lighthouse 13.6.0 output for two local test pages (one platform-neutral, one WordPress-style), with hosts renamed to `demo-site.example` and `wp-demo.example`. The real-user block in `psi-synthetic-generic-mobile.json` is made up and marked so in the file. **Not run here:** a real PageSpeed Insights call (the keyless quota returns HTTP 429 from this container) and Firefox/WebKit.

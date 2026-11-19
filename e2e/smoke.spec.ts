@@ -23,14 +23,14 @@ test("unknown paths show the app's not-found page", async ({ page }) => {
   await page.goto('does-not-exist');
   await expect(page.getByRole('heading', { level: 1, name: 'Page not found' })).toBeVisible();
   await page.getByRole('link', { name: /home/i }).first().click();
-  await expect(page.getByRole('heading', { level: 1, name: /Find the bottleneck/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Why is this page slow?' })).toBeVisible();
   expect(problems).toEqual([]);
 });
 
 test('navigation reaches every page', async ({ page }) => {
   await page.goto('./');
   const mobile = await page.getByRole('button', { name: 'Menu' }).isVisible();
-  for (const label of ['Start analysis', 'Examples', 'Compare', 'Reports', 'Docs', 'About', 'Home']) {
+  for (const label of ['Analyze a website', 'Investigate a trace', 'Examples', 'Compare', 'Reports', 'Docs', 'About', 'Home']) {
     if (mobile) await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: label, exact: true }).click();
     await expect(page.locator('h1').first()).toBeVisible();
@@ -39,6 +39,8 @@ test('navigation reaches every page', async ({ page }) => {
 
 test('keyboard: skip link moves focus to the main content', async ({ page }) => {
   await page.goto('docs');
+  // Wait for the app to render before the first Tab, or the key can land before the skip link exists.
+  await expect(page.locator('h1').first()).toBeVisible();
   await page.keyboard.press('Tab');
   const skip = page.getByRole('link', { name: 'Skip to content' });
   await expect(skip).toBeFocused();

@@ -6,7 +6,8 @@ import { Tour, openTour } from './components/Tour';
 
 const NAV = [
   { to: '/', label: 'Home', end: true },
-  { to: '/analyze', label: 'Start analysis' },
+  { to: '/analyze/url', label: 'Analyze a website' },
+  { to: '/analyze/upload', label: 'Investigate a trace' },
   { to: '/examples', label: 'Examples' },
   { to: '/compare', label: 'Compare' },
   { to: '/reports', label: 'Reports' },
