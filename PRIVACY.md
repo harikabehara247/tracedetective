@@ -6,11 +6,13 @@
 - Attribute values with sensitive-looking keys are replaced with `[redacted]` on import. This is a safety net, not a guarantee: remove secrets and personal data before importing.
 - Exported reports are created on your device and saved through your browser's download dialog.
 
-## URL check
-The URL check is the only feature that contacts anything other than this site, and only when you press **Run check**:
-- **Google PageSpeed Insights** (if selected): the URL you enter, the test device and, if you provide one, your API key are sent to `www.googleapis.com`. Google's privacy policy applies to that request. The key is held in memory for the page and never stored.
-- **Browser probe** (if selected): your browser sends 5 requests to the URL you enter, with no cookies, no referrer and caching disabled. The site you test sees your IP address, as with any visit.
-- URLs with credentials or secret-looking query parameters (token, key, signature, password, session and similar) are refused before anything is sent.
+## Website analysis
+Website analysis is the only feature that contacts anything other than this site, and only when you press **Analyze Website**. You never enter an API key.
+- **Google PageSpeed Insights**: the address you enter and the test device are sent to Google. Google's privacy policy applies.
+  - On the main site this goes through the **TraceDetective analysis service** (a Cloudflare Worker, source in `worker/`). It adds the project's own API key on the server, uses your IP address only to count tests per minute, keeps the result for the same address and device for 15 minutes so repeat tests are fast, and writes no request logs. Cloudflare's own privacy policy applies to the connection.
+  - Copies of the site built without the service call Google's public endpoint (`www.googleapis.com`) directly from your browser.
+- **Browser probe** (optional, under Advanced options): your browser sends 5 requests to the address you enter, with no cookies, no referrer and caching disabled. The site you test sees your IP address, as with any visit.
+- Addresses with credentials or secret-looking query parameters (token, key, signature, password, session and similar) are refused before anything is sent.
 
 ## Stored on your device
 - `sessionStorage` key `tracedetective:imports`: traces you imported in this tab.

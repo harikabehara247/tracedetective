@@ -10,7 +10,7 @@ test.describe('first visit', () => {
     await expect(page.getByRole('heading', { name: 'Welcome to TraceDetective' })).toBeFocused();
     for (let i = 0; i < 4; i++) await page.getByRole('button', { name: 'Next' }).click();
     await expect(page.getByRole('dialog', { name: 'Your data stays with you' })).toBeVisible();
-    await page.getByRole('button', { name: 'Check a URL' }).click();
+    await page.getByRole('button', { name: 'Analyze a website' }).click();
     await expect(page).toHaveURL(/analyze\/url$/);
     await page.goto('./');
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -29,7 +29,7 @@ test('Start analysis explains the three modes and each one opens', async ({ page
   await page.getByRole('link', { name: 'Start analysis' }).first().click();
   await expect(page.getByRole('heading', { level: 1, name: 'Start analysis' })).toBeVisible();
   for (const [cta, heading] of [
-    ['Check a URL', 'Check a website or API URL'],
+    ['Analyze a website', 'Analyze a website'],
     ['Import a trace', 'Import a JSON trace'],
     ['Open the demos', /Slow database query/],
   ] as const) {

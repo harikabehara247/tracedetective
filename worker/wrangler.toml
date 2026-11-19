@@ -1,0 +1,29 @@
+# TraceDetective PageSpeed proxy (Cloudflare Worker).
+# The Google API key is NOT in this file. Set it as a secret:
+#   npx wrangler secret put PSI_API_KEY
+name = "tracedetective-psi"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGINS = "https://harikabehara247.github.io"
+CACHE_TTL_SECONDS = "900"
+
+# 6 analyses per minute per client IP.
+[[ratelimits]]
+name = "IP_LIMITER"
+namespace_id = "1101"
+simple = { limit = 6, period = 60 }
+
+# 15 analyses per minute for the whole service: at most 21,600 a day, under
+# Google's default 25,000 PageSpeed Insights queries per day for one key.
+[[ratelimits]]
+name = "GLOBAL_LIMITER"
+namespace_id = "1102"
+simple = { limit = 15, period = 60 }
+
+# The service writes no request logs. Keep Workers Logs off so URLs and IP
+# addresses are not retained.
+[observability]
+enabled = false

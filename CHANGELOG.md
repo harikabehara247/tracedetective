@@ -4,6 +4,23 @@ All notable changes are listed here. The format follows Keep a Changelog, and ve
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-19
+
+Website analysis without API keys.
+
+### Added
+- Analysis service (`worker/`): a Cloudflare Worker that calls Google PageSpeed Insights with the project's own API key, stored only as a Worker secret. It checks the requesting origin, validates the address with the app's rules, limits each client to 6 and the whole service to 15 analyses a minute, caches successful results for 15 minutes, times out after 80 seconds, removes the key from any error text, writes no logs, and has a `/health` endpoint.
+- `Deploy analysis service` workflow: tests, deploys the Worker, stores the key from a GitHub secret and checks `/health`. The Pages build passes the `PSI_PROXY_URL` repository variable to the app.
+- Live site checks verify `/health` and run one real, unmocked analysis of example.com, which must show results or a clear explanation.
+
+### Changed
+- Website analysis asks only for a URL: enter it and press **Analyze Website**. The API key field is gone. Without the service configured, the app calls Google's keyless endpoint directly, and falls back to it once if the service cannot be reached.
+- Mobile/Desktop and the browser probe moved under **Advanced options**. The browser probe is now off by default and explains what CORS lets a browser see.
+- Results separate the **Lab test** (Lighthouse, simulated) from **Real users** (Chrome UX Report, last 28 days), with ratings against Core Web Vitals boundaries, an Overview, and a collapsible "How these numbers were measured".
+- Errors (quota used up, rate limited, service busy, page could not be loaded, timeout, network) get their own title and message, with Try again, Open on PageSpeed Insights, and Time it from my browser instead. No empty results are shown when nothing was measured.
+- **Export Report** replaces Export JSON and records lab and real-user data separately, any error, and how the result was obtained.
+- "Check website URL" is now "Analyze website" across the app.
+
 ## [0.2.1] - 2026-11-19
 
 Fixes for failures found by the first post-deploy live run of 0.2.0.

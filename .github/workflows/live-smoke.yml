@@ -28,10 +28,20 @@ jobs:
       - name: Wait for the new deployment to be served
         if: github.event_name == 'workflow_run'
         run: sleep 60
+      - name: Analysis service health
+        if: vars.PSI_PROXY_URL != ''
+        env:
+          PROXY: ${{ vars.PSI_PROXY_URL }}
+        run: |
+          body=$(curl -fsS "${PROXY%/}/health")
+          echo "health: $body"
+          case "$body" in *'"keyConfigured":true'*) ;; *) echo "::error::The analysis service reports no API key."; exit 1 ;; esac
       - run: npx playwright test --trace off
         env:
           BASE_URL: ${{ inputs.url || format('https://{0}.github.io/{1}/', github.repository_owner, github.event.repository.name) }}
           ALL_BROWSERS: '1'
+          # One unmocked analysis of example.com (desktop Chromium only): results or a clear explanation, never a blank page.
+          REAL_PSI: '1'
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

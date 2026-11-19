@@ -207,3 +207,19 @@ describe('browser probe', () => {
     expect(urlFindings(null, null)).toEqual([]);
   });
 });
+
+describe('ratings', () => {
+  it('uses Web Vitals boundaries', async () => {
+    const { rateMetric, rateFieldCategory } = await import('../src/core');
+    expect(rateMetric('lcp', 2500)).toBe('good');
+    expect(rateMetric('lcp', 2501)).toBe('needs-improvement');
+    expect(rateMetric('lcp', 4000)).toBe('poor');
+    expect(rateMetric('cls', 0.25)).toBe('needs-improvement');
+    expect(rateMetric('cls', 0.26)).toBe('poor');
+    expect(rateMetric('tbt', 150)).toBe('good');
+    expect(rateFieldCategory('FAST')).toBe('good');
+    expect(rateFieldCategory('AVERAGE')).toBe('needs-improvement');
+    expect(rateFieldCategory('SLOW')).toBe('poor');
+    expect(rateFieldCategory('NONE')).toBeUndefined();
+  });
+});

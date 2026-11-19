@@ -1,9 +1,9 @@
 /**
- * URL analysis helpers. TraceDetective has no server: URLs are measured either by
- * Google PageSpeed Insights (Google's servers fetch the page) or by the visitor's own
- * browser. Neither path lets this app fetch arbitrary URLs from a server it controls,
- * so there is no SSRF surface. Input is still validated so private and local targets
- * are refused before anything runs.
+ * URL analysis helpers, shared by the browser app and the PageSpeed proxy (worker/).
+ * URLs are measured by Google PageSpeed Insights (Google's servers fetch the page) or,
+ * optionally, by the visitor's own browser. The proxy only ever calls Google; it never
+ * fetches the visitor's URL, so there is no SSRF surface. Input is still validated, in the
+ * browser and again in the proxy, so private and local targets are refused before anything runs.
  */
 
 export type NormalizeResult = { ok: true; url: string; host: string; notes: string[] } | { ok: false; error: string };
@@ -199,29 +199,43 @@ export function parsePsi(json: unknown): PsiSummary {
   };
 }
 
-export type PsiError = { kind: 'quota' | 'invalid' | 'lighthouse' | 'timeout' | 'network' | 'unknown'; message: string };
+export type PsiErrorKind = 'quota' | 'rate_limited' | 'busy' | 'invalid' | 'lighthouse' | 'timeout' | 'network' | 'unknown';
+export type PsiError = { kind: PsiErrorKind; message: string; retryAfterSeconds?: number };
 
-/** Turn a failed PSI response or fetch error into a user-facing explanation. */
+/** Turn a failed PageSpeed Insights response (from Google or the proxy) or a fetch error into a plain explanation. */
 export function explainPsiError(status: number | null, body: unknown, thrown?: unknown): PsiError {
   if (thrown) {
     const name = (thrown as { name?: string }).name;
-    if (name === 'AbortError' || name === 'TimeoutError') return { kind: 'timeout', message: 'PageSpeed Insights did not answer within 90 seconds. Try again; slow or very large pages can take longer.' };
-    return { kind: 'network', message: 'Could not reach PageSpeed Insights. Check your connection, and whether an ad blocker or firewall blocks googleapis.com.' };
+    if (name === 'AbortError' || name === 'TimeoutError') return { kind: 'timeout', message: 'The test did not finish within 90 seconds. Very slow or very large pages can take longer. Try again in a minute.' };
+    return { kind: 'network', message: 'The analysis service could not be reached. Check your connection, and whether an ad blocker or firewall blocks it.' };
   }
-  const msg = str(obj(obj(body).error).message);
-  if (status === 429) {
+  const err = obj(obj(body).error);
+  const msg = str(err.message);
+  const code = str(err.code);
+  const retry = num(err.retryAfterSeconds);
+  // Errors produced by the TraceDetective proxy carry a string code.
+  if (code === 'rate_limited') return { kind: 'rate_limited', message: `Too many analyses from your connection in a short time. Please wait ${retry ?? 60} seconds and try again.`, retryAfterSeconds: retry ?? 60 };
+  if (code === 'busy') return { kind: 'busy', message: 'The analysis service is very busy right now. Please try again in a minute.', retryAfterSeconds: retry ?? 60 };
+  if (code === 'quota' || status === 429) {
     return {
       kind: 'quota',
-      message: 'PageSpeed Insights refused the request because the shared free quota is used up. Add your own free API key (see the link below the form) or try again later.',
+      message: 'Google’s free PageSpeed Insights quota is used up for now, so the lab test could not run. Try again later, open the same test on the PageSpeed Insights website, or run the browser timing check instead.',
     };
   }
-  if (status === 400 && /FAILED_DOCUMENT_REQUEST|ERRORED_DOCUMENT_REQUEST|DNS|NO_FCP|unable to reliably load/i.test(msg)) {
-    return { kind: 'lighthouse', message: `Google's test browser could not load the page: ${msg}` };
+  if (code === 'not_configured') return { kind: 'busy', message: 'The analysis service is temporarily unavailable. Please try again later, or open the test on the PageSpeed Insights website.' };
+  if (code === 'invalid_url') return { kind: 'invalid', message: msg || 'That URL cannot be analysed.' };
+  if (code === 'lighthouse' || ((status === 400 || status === 500) && /FAILED_DOCUMENT_REQUEST|ERRORED_DOCUMENT_REQUEST|DNS|NO_FCP|NOT_HTML|unable to reliably load|INSECURE|PROTOCOL_TIMEOUT/i.test(msg))) {
+    return {
+      kind: 'lighthouse',
+      message: `Google’s test browser could not load this page. The site may be down, slow to respond, blocking automated browsers, or not returning an HTML page.${msg ? ` Details: ${shorten(msg)}` : ''}`,
+    };
   }
-  if (status === 400) return { kind: 'invalid', message: msg ? `PageSpeed Insights rejected the request: ${msg}` : 'PageSpeed Insights rejected the request.' };
-  if (status === 500 && msg) return { kind: 'lighthouse', message: `PageSpeed Insights could not test the page: ${msg}` };
-  return { kind: 'unknown', message: msg || `PageSpeed Insights returned HTTP ${status ?? 'error'}.` };
+  if (status === 400) return { kind: 'invalid', message: msg ? `PageSpeed Insights could not accept this URL: ${shorten(msg)}` : 'PageSpeed Insights could not accept this URL.' };
+  if (status !== null && status >= 500) return { kind: 'unknown', message: `The analysis service had a temporary problem (HTTP ${status}). Please try again.` };
+  return { kind: 'unknown', message: msg ? shorten(msg) : `The analysis failed (HTTP ${status ?? 'error'}).` };
 }
+
+const shorten = (m: string) => (m.length > 300 ? `${m.slice(0, 297)}…` : m);
 
 // ---------------------------------------------------------------------------
 // Browser probe: timing of requests made by the visitor's own browser
@@ -338,7 +352,8 @@ export interface UrlFinding {
   title: string;
   evidence: string[];
   verifyNext: string[];
-  source: 'PageSpeed Insights' | 'Browser probe';
+  /** lab = Lighthouse simulated load, field = Chrome UX Report real users, probe = this browser. */
+  source: 'Lighthouse lab test' | 'Chrome real-user data' | 'Browser probe';
 }
 
 const fmt = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${Math.round(ms)} ms`);
@@ -352,12 +367,12 @@ export function urlFindings(psi: PsiSummary | null, probe: ProbeSummary | null):
   if (psi) {
     const status = psi.mainDocument?.statusCode;
     if (status !== undefined && status >= 400) {
-      out.push({ id: 'http-error', severity: 'high', source: 'PageSpeed Insights', title: `The page returned HTTP ${status}`, evidence: [`Main document ${psi.mainDocument?.url}: status ${status}`], verifyNext: ['Open the URL yourself and check server or CDN error logs for this time.'] });
+      out.push({ id: 'http-error', severity: 'high', source: 'Lighthouse lab test', title: `The page returned HTTP ${status}`, evidence: [`Main document ${psi.mainDocument?.url}: status ${status}`], verifyNext: ['Open the URL yourself and check server or CDN error logs for this time.'] });
     }
     if (psi.redirects.length > 1 || (psi.redirects.length === 1 && psi.redirects[0]!.wastedMs > 0)) {
       const wasted = psi.redirects.reduce((s, r) => s + r.wastedMs, 0);
       out.push({
-        id: 'redirects', severity: wasted >= 300 ? 'medium' : 'low', source: 'PageSpeed Insights',
+        id: 'redirects', severity: wasted >= 300 ? 'medium' : 'low', source: 'Lighthouse lab test',
         title: `${Math.max(psi.redirects.length - 1, 1)} redirect${psi.redirects.length > 2 ? 's' : ''} before the page loads`,
         evidence: [...psi.redirects.map((r) => `${r.url}${r.wastedMs ? ` (+${fmt(r.wastedMs)})` : ''}`), `Lighthouse estimates ${fmt(wasted)} spent on redirects.`],
         verifyNext: ['Link directly to the final URL (protocol, www and trailing slash) in menus, sitemaps and ads.'],
@@ -365,28 +380,28 @@ export function urlFindings(psi: PsiSummary | null, probe: ProbeSummary | null):
     }
     if (psi.serverResponseMs !== undefined && psi.serverResponseMs > URL_THRESHOLDS.serverResponseMs) {
       out.push({
-        id: 'slow-server', severity: psi.serverResponseMs > 1800 ? 'high' : 'medium', source: 'PageSpeed Insights',
+        id: 'slow-server', severity: psi.serverResponseMs > 1800 ? 'high' : 'medium', source: 'Lighthouse lab test',
         title: `Slow server response: ${fmt(psi.serverResponseMs)} for the main document`,
         evidence: [`Lighthouse "server response time" ${fmt(psi.serverResponseMs)} (audit fails above ${URL_THRESHOLDS.serverResponseMs} ms).`, 'Measured from Google’s data centre, not from your users’ locations.'],
         verifyNext: ['Check whether full-page caching is active for this URL.', 'Profile the backend for this request (application logs, APM traces, slow-query log). An external test cannot see which code or query is slow.'],
       });
     }
     if (psi.lcpMs !== undefined && psi.lcpMs > URL_THRESHOLDS.lcpMs) {
-      out.push({ id: 'lcp', severity: psi.lcpMs > 4000 ? 'high' : 'medium', source: 'PageSpeed Insights', title: `Largest Contentful Paint ${fmt(psi.lcpMs)} in the lab test`, evidence: [`Lab LCP ${fmt(psi.lcpMs)} (${psi.formFactor || 'unknown'} profile; good is ≤ 2.5 s).`], verifyNext: ['Check which element is the LCP element in the full PageSpeed report and whether it is a large image or late-loading resource.'] });
+      out.push({ id: 'lcp', severity: psi.lcpMs > 4000 ? 'high' : 'medium', source: 'Lighthouse lab test', title: `Largest Contentful Paint ${fmt(psi.lcpMs)} in the lab test`, evidence: [`Lab LCP ${fmt(psi.lcpMs)} (${psi.formFactor || 'unknown'} profile; good is ≤ 2.5 s).`], verifyNext: ['Check which element is the LCP element in the full PageSpeed report and whether it is a large image or late-loading resource.'] });
     }
     if (psi.tbtMs !== undefined && psi.tbtMs > URL_THRESHOLDS.tbtMs) {
-      out.push({ id: 'tbt', severity: psi.tbtMs > 600 ? 'medium' : 'low', source: 'PageSpeed Insights', title: `Main thread blocked for ${fmt(psi.tbtMs)}`, evidence: [`Total Blocking Time ${fmt(psi.tbtMs)} (good is ≤ 200 ms).`], verifyNext: ['Look at the "Reduce JavaScript execution time" and "unused JavaScript" items in the full report.'] });
+      out.push({ id: 'tbt', severity: psi.tbtMs > 600 ? 'medium' : 'low', source: 'Lighthouse lab test', title: `Main thread blocked for ${fmt(psi.tbtMs)}`, evidence: [`Total Blocking Time ${fmt(psi.tbtMs)} (good is ≤ 200 ms).`], verifyNext: ['Look at the "Reduce JavaScript execution time" and "unused JavaScript" items in the full report.'] });
     }
     if (psi.cls !== undefined && psi.cls > URL_THRESHOLDS.cls) {
-      out.push({ id: 'cls', severity: psi.cls > 0.25 ? 'medium' : 'low', source: 'PageSpeed Insights', title: `Layout shifts while loading (CLS ${psi.cls.toFixed(2)})`, evidence: [`Cumulative Layout Shift ${psi.cls.toFixed(3)} (good is ≤ 0.1).`], verifyNext: ['Give images, ads and embeds explicit width and height.'] });
+      out.push({ id: 'cls', severity: psi.cls > 0.25 ? 'medium' : 'low', source: 'Lighthouse lab test', title: `Layout shifts while loading (CLS ${psi.cls.toFixed(2)})`, evidence: [`Cumulative Layout Shift ${psi.cls.toFixed(3)} (good is ≤ 0.1).`], verifyNext: ['Give images, ads and embeds explicit width and height.'] });
     }
     if (psi.totalBytes !== undefined && psi.totalBytes > URL_THRESHOLDS.pageBytes) {
-      out.push({ id: 'weight', severity: 'low', source: 'PageSpeed Insights', title: `Heavy page: ${kb(psi.totalBytes)} transferred`, evidence: [`Total transfer ${kb(psi.totalBytes)} across ${psi.requestCount ?? '?'} requests.`], verifyNext: ['Check image formats and sizes, and unused JavaScript and CSS.'] });
+      out.push({ id: 'weight', severity: 'low', source: 'Lighthouse lab test', title: `Heavy page: ${kb(psi.totalBytes)} transferred`, evidence: [`Total transfer ${kb(psi.totalBytes)} across ${psi.requestCount ?? '?'} requests.`], verifyNext: ['Check image formats and sizes, and unused JavaScript and CSS.'] });
     }
     if (psi.field) {
       const poor = psi.field.metrics.filter((m) => m.category === 'SLOW' || m.category === 'POOR' || m.category === 'AVERAGE' || m.category === 'NEEDS_IMPROVEMENT');
       if (poor.length) {
-        out.push({ id: 'field', severity: 'medium', source: 'PageSpeed Insights', title: `Real-user data (${psi.field.scope === 'url' ? 'this URL' : 'whole site'}) shows metrics that need improvement`, evidence: poor.map((m) => `${m.label}: ${m.unit === 'ms' ? fmt(m.percentile) : m.percentile.toFixed(2)} (${m.category.toLowerCase().replace('_', ' ')})`), verifyNext: ['Field data is a 28-day rolling Chrome UX Report window; check again after changes have been live for a few weeks.'] });
+        out.push({ id: 'field', severity: 'medium', source: 'Chrome real-user data', title: `Real-user data (${psi.field.scope === 'url' ? 'this URL' : 'whole site'}) shows metrics that need improvement`, evidence: poor.map((m) => `${m.label}: ${m.unit === 'ms' ? fmt(m.percentile) : m.percentile.toFixed(2)} (${m.category.toLowerCase().replace('_', ' ')})`), verifyNext: ['Field data is a 28-day rolling Chrome UX Report window; check again after changes have been live for a few weeks.'] });
       }
     }
   }
@@ -398,7 +413,42 @@ export function urlFindings(psi: PsiSummary | null, probe: ProbeSummary | null):
     }
   }
   if (out.length === 0 && (psi || probe)) {
-    out.push({ id: 'none', severity: 'info', source: psi ? 'PageSpeed Insights' : 'Browser probe', title: 'No problems crossed the reporting thresholds', evidence: ['All measured values are within the thresholds listed under Methodology.'], verifyNext: ['One test is one sample. Repeat at different times of day before drawing conclusions.'] });
+    out.push({ id: 'none', severity: 'info', source: psi ? 'Lighthouse lab test' : 'Browser probe', title: 'No problems crossed the reporting thresholds', evidence: ['All measured values are within the thresholds listed under Methodology.'], verifyNext: ['One test is one sample. Repeat at different times of day before drawing conclusions.'] });
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Ratings (Core Web Vitals and Lighthouse boundaries)
+// ---------------------------------------------------------------------------
+
+export type Rating = 'good' | 'needs-improvement' | 'poor';
+export type RatedMetric = 'fcp' | 'lcp' | 'tbt' | 'cls' | 'speedIndex' | 'serverResponse' | 'inp' | 'ttfb';
+
+/** [good up to, poor from]. Web Vitals boundaries for field metrics; Lighthouse mobile boundaries for lab-only metrics. */
+export const RATING_BOUNDARIES: Record<RatedMetric, [number, number]> = {
+  fcp: [1800, 3000],
+  lcp: [2500, 4000],
+  tbt: [200, 600],
+  cls: [0.1, 0.25],
+  speedIndex: [3400, 5800],
+  serverResponse: [600, 1800],
+  inp: [200, 500],
+  ttfb: [800, 1800],
+};
+
+export function rateMetric(metric: RatedMetric, value: number): Rating {
+  const [good, poor] = RATING_BOUNDARIES[metric];
+  if (value <= good) return 'good';
+  if (value > poor || (metric !== 'cls' && value >= poor)) return 'poor';
+  return 'needs-improvement';
+}
+
+/** Chrome UX Report categories → the same three ratings. */
+export function rateFieldCategory(category: string): Rating | undefined {
+  const c = category.toUpperCase();
+  if (c === 'FAST' || c === 'GOOD') return 'good';
+  if (c === 'AVERAGE' || c === 'NEEDS_IMPROVEMENT') return 'needs-improvement';
+  if (c === 'SLOW' || c === 'POOR') return 'poor';
+  return undefined;
 }

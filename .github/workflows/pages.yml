@@ -27,6 +27,8 @@ jobs:
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
           VITE_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          # The analysis service URL (not a secret). Empty: the site calls Google's keyless endpoint.
+          VITE_PSI_PROXY_URL: ${{ vars.PSI_PROXY_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
