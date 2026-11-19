@@ -13,7 +13,7 @@ export default defineConfig({
   use: { baseURL, trace: 'off' },
   webServer: live
     ? undefined
-    : { command: 'npm run build:pages && npx vite preview --port 4173 --strictPort', url: 'http://localhost:4173', reuseExistingServer: true, timeout: 120_000 },
+    : { command: 'VITE_REPO_URL=https://github.com/harikabehara247/tracedetective npm run build:pages && npx vite preview --port 4173 --strictPort', url: 'http://localhost:4173', reuseExistingServer: true, timeout: 120_000 },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
     { name: 'tablet', use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 } } },

@@ -2,6 +2,10 @@ import { z } from 'zod';
 import type { AttributeValue, Span, TraceDocument, ValidationIssue } from './types';
 import { convertOtlp, looksLikeOtlp, unwrapOtlp } from './otlp';
 
+// Zod's optional JIT probes `new Function`, which the Content Security Policy blocks (and
+// Firefox reports as a violation). Validation does not need it.
+z.config({ jitless: true });
+
 export const LIMITS = {
   maxFileBytes: 2 * 1024 * 1024,
   maxSpans: 10_000,

@@ -1,4 +1,4 @@
-import { ROUTES, expect, noHorizontalScroll, test, trackProblems } from './helpers';
+import { ROUTES, cspViolations, expect, noHorizontalScroll, test, trackProblems } from './helpers';
 
 test('every route returns HTTP 200 on a direct load and a refresh, with no console errors, failed assets or overflow', async ({ page }) => {
   const problems = trackProblems(page);
@@ -8,8 +8,10 @@ test('every route returns HTTP 200 on a direct load and a refresh, with no conso
       expect(res?.status(), `status for /${r}`).toBe(200);
       await expect(page.locator('h1').first()).toBeVisible();
       await noHorizontalScroll(page);
+      expect(await cspViolations(page), `CSP violations on /${r}`).toEqual([]);
       const again = await page.reload();
-      expect(again?.status(), `status after refresh for /${r}`).toBe(200);
+      // A refresh may be answered from the HTTP cache (304 Not Modified), which is also a success.
+      expect([200, 304], `status after refresh for /${r}`).toContain(again?.status());
       await expect(page.locator('h1').first()).toBeVisible();
     });
   }
@@ -61,13 +63,13 @@ test('waterfall and details stay in sync, with keyboard support', async ({ page 
   await expect(page.getByRole('heading', { level: 3, name: 'Database call dominates the request: SELECT inventory' })).toBeVisible();
   const tree = page.getByRole('tree', { name: 'Span hierarchy and timeline' });
   await tree.getByRole('treeitem', { name: /payment\.authorize/ }).click();
-  await expect(page.getByRole('heading', { level: 3, name: 'payment.authorize' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 3, name: 'payment.authorize', exact: true })).toBeVisible();
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('heading', { level: 3, name: 'INSERT orders' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 3, name: 'INSERT orders', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/span=db-ins-1/);
   // Evidence link selects the span.
   await page.getByRole('button', { name: /order-service · SELECT inventory/ }).first().click();
-  await expect(page.getByRole('heading', { level: 3, name: 'SELECT inventory' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 3, name: 'SELECT inventory', exact: true })).toBeVisible();
 });
 
 test('filters narrow the timeline', async ({ page }) => {

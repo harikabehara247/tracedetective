@@ -17,7 +17,7 @@ export function About() {
       </Card>
       <Card>
         <h2 className="text-lg font-semibold">Project</h2>
-        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
+        <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1 text-sm">
           <dt className="text-muted">Created and maintained by</dt>
           <dd>{SITE.creator}</dd>
           <dt className="text-muted">License</dt>
@@ -25,7 +25,7 @@ export function About() {
           <dt className="text-muted">Version</dt>
           <dd>{TOOL.version}</dd>
           <dt className="text-muted">Source code</dt>
-          <dd>{SITE.repoUrl ? <a href={SITE.repoUrl}>{SITE.repoUrl.replace(/^https?:\/\//, '')}</a> : 'Repository link will be published at launch.'}</dd>
+          <dd className="break-all">{SITE.repoUrl ? <a href={SITE.repoUrl}>{SITE.repoUrl.replace(/^https?:\/\//, '')}</a> : 'Repository link will be published at launch.'}</dd>
         </dl>
       </Card>
       <Card>
