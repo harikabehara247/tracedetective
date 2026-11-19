@@ -1,0 +1,137 @@
+{
+  "schemaVersion": "1.0",
+  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "name": "Healthy order request",
+  "description": "Synthetic baseline: POST /api/orders completing normally in about 450 ms.",
+  "synthetic": true,
+  "spans": [
+    {
+      "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "spanId": "gw-1",
+      "name": "POST /api/orders",
+      "service": "api-gateway",
+      "kind": "server",
+      "startTimeMs": 1795000000000.0,
+      "durationMs": 448,
+      "status": "ok",
+      "attributes": {
+        "http.request.method": "POST",
+        "http.route": "/api/orders",
+        "url.path": "/api/orders",
+        "http.response.status_code": 201
+      }
+    },
+    {
+      "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "spanId": "auth-1",
+      "name": "auth.v1.Tokens/Verify",
+      "service": "api-gateway",
+      "kind": "client",
+      "startTimeMs": 1795000000004.0,
+      "durationMs": 18,
+      "status": "ok",
+      "attributes": {
+        "rpc.system": "grpc",
+        "rpc.service": "auth.v1.Tokens",
+        "rpc.method": "Verify",
+        "server.address": "auth.internal.example"
+      },
+      "parentSpanId": "gw-1"
+    },
+    {
+      "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "spanId": "ord-1",
+      "name": "POST /orders",
+      "service": "order-service",
+      "kind": "server",
+      "startTimeMs": 1795000000026.0,
+      "durationMs": 386,
+      "status": "ok",
+      "attributes": {
+        "http.request.method": "POST",
+        "http.route": "/orders",
+        "http.response.status_code": 201
+      },
+      "parentSpanId": "gw-1"
+    },
+    {
+      "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "spanId": "db-sel-1",
+      "name": "SELECT inventory",
+      "service": "order-service",
+      "kind": "client",
+      "startTimeMs": 1795000000032.0,
+      "durationMs": 38,
+      "status": "ok",
+      "attributes": {
+        "db.system.name": "postgresql",
+        "db.namespace": "shop",
+        "db.operation.name": "SELECT",
+        "db.query.text": "SELECT sku, qty_available FROM inventory WHERE sku = ANY($1)"
+      },
+      "parentSpanId": "ord-1"
+    },
+    {
+      "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "spanId": "pay-1",
+      "name": "payment.authorize",
+      "service": "order-service",
+      "kind": "client",
+      "startTimeMs": 1795000000074.0,
+      "durationMs": 210,
+      "status": "ok",
+      "attributes": {
+        "http.request.method": "POST",
+        "server.address": "payments.internal.example",
+        "url.full": "http://payments.internal.example/v1/authorize",
+        "http.response.status_code": 200
+      },
+      "parentSpanId": "ord-1"
+    },
+    {
+      "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "spanId": "db-ins-1",
+      "name": "INSERT orders",
+      "service": "order-service",
+      "kind": "client",
+      "startTimeMs": 1795000000290.0,
+      "durationMs": 46,
+      "status": "ok",
+      "attributes": {
+        "db.system.name": "postgresql",
+        "db.namespace": "shop",
+        "db.operation.name": "INSERT",
+        "db.query.text": "INSERT INTO orders (customer_id, total_cents, status) VALUES ($1, $2, $3) RETURNING id"
+      },
+      "parentSpanId": "ord-1"
+    },
+    {
+      "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "spanId": "pub-1",
+      "name": "publish order.created",
+      "service": "order-service",
+      "kind": "producer",
+      "startTimeMs": 1795000000340.0,
+      "durationMs": 14,
+      "status": "ok",
+      "attributes": {
+        "messaging.system": "kafka",
+        "messaging.destination.name": "order.created",
+        "messaging.operation.type": "send"
+      },
+      "parentSpanId": "ord-1"
+    },
+    {
+      "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "spanId": "ser-1",
+      "name": "serialize response",
+      "service": "order-service",
+      "kind": "internal",
+      "startTimeMs": 1795000000356.0,
+      "durationMs": 48,
+      "status": "ok",
+      "attributes": {},
+      "parentSpanId": "ord-1"
+    }
+  ]
+}

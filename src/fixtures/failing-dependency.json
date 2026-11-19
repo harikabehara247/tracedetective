@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "1.0",
+  "traceId": "0af7651916cd43dd8448eb211c80319c",
+  "name": "Failing payment dependency",
+  "description": "Synthetic failure: payment-service returns 503 twice and the order request fails with 502.",
+  "synthetic": true,
+  "spans": [
+    {
+      "traceId": "0af7651916cd43dd8448eb211c80319c",
+      "spanId": "gw-1",
+      "name": "POST /api/orders",
+      "service": "api-gateway",
+      "kind": "server",
+      "startTimeMs": 1795000000000.0,
+      "durationMs": 372,
+      "status": "error",
+      "attributes": {
+        "http.request.method": "POST",
+        "http.route": "/api/orders",
+        "url.path": "/api/orders",
+        "http.response.status_code": 502
+      }
+    },
+    {
+      "traceId": "0af7651916cd43dd8448eb211c80319c",
+      "spanId": "auth-1",
+      "name": "auth.v1.Tokens/Verify",
+      "service": "api-gateway",
+      "kind": "client",
+      "startTimeMs": 1795000000004.0,
+      "durationMs": 18,
+      "status": "ok",
+      "attributes": {
+        "rpc.system": "grpc",
+        "rpc.service": "auth.v1.Tokens",
+        "rpc.method": "Verify",
+        "server.address": "auth.internal.example"
+      },
+      "parentSpanId": "gw-1"
+    },
+    {
+      "traceId": "0af7651916cd43dd8448eb211c80319c",
+      "spanId": "ord-1",
+      "name": "POST /orders",
+      "service": "order-service",
+      "kind": "server",
+      "startTimeMs": 1795000000026.0,
+      "durationMs": 326,
+      "status": "error",
+      "attributes": {
+        "http.request.method": "POST",
+        "http.route": "/orders",
+        "http.response.status_code": 502,
+        "error.type": "UpstreamUnavailable"
+      },
+      "parentSpanId": "gw-1"
+    },
+    {
+      "traceId": "0af7651916cd43dd8448eb211c80319c",
+      "spanId": "db-sel-1",
+      "name": "SELECT inventory",
+      "service": "order-service",
+      "kind": "client",
+      "startTimeMs": 1795000000032.0,
+      "durationMs": 38,
+      "status": "ok",
+      "attributes": {
+        "db.system.name": "postgresql",
+        "db.namespace": "shop",
+        "db.operation.name": "SELECT",
+        "db.query.text": "SELECT sku, qty_available FROM inventory WHERE sku = ANY($1)"
+      },
+      "parentSpanId": "ord-1"
+    },
+    {
+      "traceId": "0af7651916cd43dd8448eb211c80319c",
+      "spanId": "pay-1",
+      "name": "payment.authorize",
+      "service": "order-service",
+      "kind": "client",
+      "startTimeMs": 1795000000074.0,
+      "durationMs": 122,
+      "status": "error",
+      "attributes": {
+        "http.request.method": "POST",
+        "server.address": "payments.internal.example",
+        "url.full": "http://payments.internal.example/v1/authorize",
+        "http.response.status_code": 503,
+        "http.request.resend_count": 0,
+        "error.message": "503 Service Unavailable"
+      },
+      "parentSpanId": "ord-1"
+    },
+    {
+      "traceId": "0af7651916cd43dd8448eb211c80319c",
+      "spanId": "pay-2",
+      "name": "payment.authorize",
+      "service": "order-service",
+      "kind": "client",
+      "startTimeMs": 1795000000246.0,
+      "durationMs": 98,
+      "status": "error",
+      "attributes": {
+        "http.request.method": "POST",
+        "server.address": "payments.internal.example",
+        "url.full": "http://payments.internal.example/v1/authorize",
+        "http.response.status_code": 503,
+        "http.request.resend_count": 1,
+        "error.message": "503 Service Unavailable"
+      },
+      "parentSpanId": "ord-1"
+    }
+  ]
+}

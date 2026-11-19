@@ -1,0 +1,170 @@
+{
+  "schemaVersion": "1.0",
+  "traceId": "d4cda95b652f4a1592b449d5929fda1b",
+  "name": "Slow external payment provider",
+  "description": "Synthetic regression: the card network call inside payment-service takes about 2.2 s.",
+  "synthetic": true,
+  "spans": [
+    {
+      "traceId": "d4cda95b652f4a1592b449d5929fda1b",
+      "spanId": "gw-1",
+      "name": "POST /api/orders",
+      "service": "api-gateway",
+      "kind": "server",
+      "startTimeMs": 1795000000000.0,
+      "durationMs": 2494,
+      "status": "ok",
+      "attributes": {
+        "http.request.method": "POST",
+        "http.route": "/api/orders",
+        "url.path": "/api/orders",
+        "http.response.status_code": 201
+      }
+    },
+    {
+      "traceId": "d4cda95b652f4a1592b449d5929fda1b",
+      "spanId": "auth-1",
+      "name": "auth.v1.Tokens/Verify",
+      "service": "api-gateway",
+      "kind": "client",
+      "startTimeMs": 1795000000004.0,
+      "durationMs": 18,
+      "status": "ok",
+      "attributes": {
+        "rpc.system": "grpc",
+        "rpc.service": "auth.v1.Tokens",
+        "rpc.method": "Verify",
+        "server.address": "auth.internal.example"
+      },
+      "parentSpanId": "gw-1"
+    },
+    {
+      "traceId": "d4cda95b652f4a1592b449d5929fda1b",
+      "spanId": "ord-1",
+      "name": "POST /orders",
+      "service": "order-service",
+      "kind": "server",
+      "startTimeMs": 1795000000026.0,
+      "durationMs": 2456,
+      "status": "ok",
+      "attributes": {
+        "http.request.method": "POST",
+        "http.route": "/orders",
+        "http.response.status_code": 201
+      },
+      "parentSpanId": "gw-1"
+    },
+    {
+      "traceId": "d4cda95b652f4a1592b449d5929fda1b",
+      "spanId": "db-sel-1",
+      "name": "SELECT inventory",
+      "service": "order-service",
+      "kind": "client",
+      "startTimeMs": 1795000000032.0,
+      "durationMs": 38,
+      "status": "ok",
+      "attributes": {
+        "db.system.name": "postgresql",
+        "db.namespace": "shop",
+        "db.operation.name": "SELECT",
+        "db.query.text": "SELECT sku, qty_available FROM inventory WHERE sku = ANY($1)"
+      },
+      "parentSpanId": "ord-1"
+    },
+    {
+      "traceId": "d4cda95b652f4a1592b449d5929fda1b",
+      "spanId": "pay-1",
+      "name": "payment.authorize",
+      "service": "order-service",
+      "kind": "client",
+      "startTimeMs": 1795000000074.0,
+      "durationMs": 2280,
+      "status": "ok",
+      "attributes": {
+        "http.request.method": "POST",
+        "server.address": "payments.internal.example",
+        "url.full": "http://payments.internal.example/v1/authorize",
+        "http.response.status_code": 200
+      },
+      "parentSpanId": "ord-1"
+    },
+    {
+      "traceId": "d4cda95b652f4a1592b449d5929fda1b",
+      "spanId": "pay-srv-1",
+      "name": "POST /v1/authorize",
+      "service": "payment-service",
+      "kind": "server",
+      "startTimeMs": 1795000000078.0,
+      "durationMs": 2272,
+      "status": "ok",
+      "attributes": {
+        "http.request.method": "POST",
+        "http.route": "/v1/authorize",
+        "http.response.status_code": 200
+      },
+      "parentSpanId": "pay-1"
+    },
+    {
+      "traceId": "d4cda95b652f4a1592b449d5929fda1b",
+      "spanId": "card-1",
+      "name": "card-network.authorize",
+      "service": "payment-service",
+      "kind": "client",
+      "startTimeMs": 1795000000088.0,
+      "durationMs": 2246,
+      "status": "ok",
+      "attributes": {
+        "http.request.method": "POST",
+        "server.address": "api.card-network.example",
+        "url.full": "https://api.card-network.example/authorizations",
+        "http.response.status_code": 200
+      },
+      "parentSpanId": "pay-srv-1"
+    },
+    {
+      "traceId": "d4cda95b652f4a1592b449d5929fda1b",
+      "spanId": "db-ins-1",
+      "name": "INSERT orders",
+      "service": "order-service",
+      "kind": "client",
+      "startTimeMs": 1795000002360.0,
+      "durationMs": 46,
+      "status": "ok",
+      "attributes": {
+        "db.system.name": "postgresql",
+        "db.namespace": "shop",
+        "db.operation.name": "INSERT",
+        "db.query.text": "INSERT INTO orders (customer_id, total_cents, status) VALUES ($1, $2, $3) RETURNING id"
+      },
+      "parentSpanId": "ord-1"
+    },
+    {
+      "traceId": "d4cda95b652f4a1592b449d5929fda1b",
+      "spanId": "pub-1",
+      "name": "publish order.created",
+      "service": "order-service",
+      "kind": "producer",
+      "startTimeMs": 1795000002410.0,
+      "durationMs": 14,
+      "status": "ok",
+      "attributes": {
+        "messaging.system": "kafka",
+        "messaging.destination.name": "order.created",
+        "messaging.operation.type": "send"
+      },
+      "parentSpanId": "ord-1"
+    },
+    {
+      "traceId": "d4cda95b652f4a1592b449d5929fda1b",
+      "spanId": "ser-1",
+      "name": "serialize response",
+      "service": "order-service",
+      "kind": "internal",
+      "startTimeMs": 1795000002426.0,
+      "durationMs": 48,
+      "status": "ok",
+      "attributes": {},
+      "parentSpanId": "ord-1"
+    }
+  ]
+}
