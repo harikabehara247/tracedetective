@@ -62,7 +62,7 @@ describe('validation', () => {
     expect(codes(MALFORMED.selfParent)).toContain('self_parent');
     expect(codes(MALFORMED.traceMismatch)).toContain('trace_id_mismatch');
   });
-  it('rejects invalid JSON, empty text, oversized files and OTLP with clear messages', () => {
+  it('rejects invalid JSON, empty text, oversized files and empty OTLP with clear messages', () => {
     const code = (text: string, bytes?: number) => {
       const r = parseTraceText(text, bytes);
       return r.ok ? 'ok' : r.errors[0]!.code;
@@ -70,7 +70,7 @@ describe('validation', () => {
     expect(code('{not json')).toBe('invalid_json');
     expect(code('   ')).toBe('empty');
     expect(code('{}', 3 * 1024 * 1024)).toBe('too_large');
-    expect(code(JSON.stringify({ resourceSpans: [] }))).toBe('unsupported_format');
+    expect(code(JSON.stringify({ resourceSpans: [] }))).toBe('otlp_empty');
     expect(code(JSON.stringify(VALID_MINIMAL))).toBe('ok');
   });
   it('redacts sensitive attribute values and truncates long strings', () => {

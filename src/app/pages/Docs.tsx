@@ -6,6 +6,8 @@ import { PageHeader, useDocumentTitle } from '../ui';
 
 const SECTIONS = [
   ['quick-start', 'Quick start'],
+  ['url-check', 'URL check'],
+  ['otlp', 'OpenTelemetry import'],
   ['schema', 'JSON schema'],
   ['timing', 'How timing is calculated'],
   ['rules', 'Insight rules'],
@@ -71,7 +73,7 @@ export function Docs() {
 
         <Section id="quick-start" title="Quick start">
           <ol>
-            <li>Open an <Link to="/examples">example trace</Link>, or import your own on the <Link to="/analyze/upload">Upload</Link> tab.</li>
+            <li>Go to <Link to="/analyze">Start analysis</Link> and pick a mode: check a public URL, import your own trace, or open an <Link to="/examples">example trace</Link>.</li>
             <li>In the timeline, select a span with the mouse or move through spans with the arrow keys. Details and related insights update as you go.</li>
             <li>Read the insights. Each one lists the evidence, other explanations to consider and what to verify next.</li>
             <li>Compare against a healthy trace of the same endpoint on the <Link to="/compare">Compare</Link> page.</li>
@@ -80,13 +82,60 @@ export function Docs() {
           <p>To run it yourself: <code>npm install</code>, then <code>npm run dev</code>. <code>npm test</code> runs the test suite and <code>npm run build</code> produces a static site in <code>dist/</code>.</p>
         </Section>
 
+        <Section id="url-check" title="URL check">
+          <p>
+            The <Link to="/analyze/url">URL check</Link> measures a public website or API endpoint from outside. {SITE.name} has no server, so it never fetches
+            URLs itself. Two methods are available, and you choose which run:
+          </p>
+          <ul>
+            <li>
+              <strong>Google PageSpeed Insights (API v5).</strong> Google’s servers load the page with Lighthouse and return HTTP status, final URL, redirects,
+              server response time, FCP, LCP, TBT, CLS, page weight and, when Google has enough traffic data, real-user Chrome UX Report metrics. This sends the
+              URL to Google. The shared keyless quota is often exhausted, so you can paste your own free API key; it is used only for that request and is not saved.
+            </li>
+            <li>
+              <strong>Browser probe.</strong> Your browser sends 5 sequential <code>GET</code> requests with <code>no-cors</code>, no cookies, no referrer and no cache,
+              and times each one. The response is opaque, so status codes and redirects are not visible. DNS, TCP and TLS timing are only shown when the server
+              sends <code>Timing-Allow-Origin</code>. <code>http://</code> URLs cannot be probed from this https page.
+            </li>
+          </ul>
+          <p>
+            Input is normalised (https:// is added, fragments are removed) and refused when it has credentials, a secret-looking query parameter, or a local,
+            private-network, link-local or internal host. Findings appear only when a measured value crosses a published threshold: server response over 600 ms,
+            LCP over 2.5 s, TBT over 200 ms, CLS over 0.1, more than 1.6 MB transferred, a redirect chain, an HTTP error, or a cold first request much slower than repeats.
+          </p>
+          <p>
+            An external check cannot see inside the server. It never reports database, query, cache or code-level causes. Use it to decide whether a problem is
+            the network, the server response, or the page itself, then import a trace to see inside the server.
+          </p>
+        </Section>
+
+        <Section id="otlp" title="OpenTelemetry import">
+          <p>The Upload tab accepts OpenTelemetry trace data directly:</p>
+          <ul>
+            <li>OTLP/JSON with a top-level <code>resourceSpans</code> array, including the older <code>instrumentationLibrarySpans</code> key.</li>
+            <li>OpenTelemetry Collector file exporter output: one OTLP JSON request per line. The lines are merged.</li>
+            <li>Grafana Tempo API responses: <code>batches</code> (v1) and <code>trace.resourceSpans</code> (v2).</li>
+          </ul>
+          <p>
+            Hex IDs are used as they are; base64 IDs from generic protobuf JSON encoders are converted to hex. Nanosecond timestamps become milliseconds. Span kind
+            and status accept integer or string enums. <code>service.name</code> comes from the resource. Exception events add <code>exception.type</code> and{' '}
+            <code>exception.message</code>, and the status message becomes <code>error.message</code>. Array and map attribute values are kept as JSON text.
+          </p>
+          <p>
+            Spans without IDs or with an end before their start are skipped with a warning. When a file holds several traces, the one with the most spans is
+            opened and the warning names the others. Attributes beyond {LIMITS.maxAttributes} per span are dropped with a warning. Every parent must be in the file;
+            a partial export is rejected and the missing span is named.
+          </p>
+        </Section>
+
         <Section id="schema" title="JSON schema (version 1.0)">
           <p>
             A document has <code>schemaVersion</code> (must be <code>"1.0"</code>), <code>traceId</code>, optional <code>name</code> and
             <code> description</code>, <code>synthetic</code> (true for generated data) and a <code>spans</code> array with 1 to{' '}
             {LIMITS.maxSpans.toLocaleString('en-US')} spans. Files over 2 MB are rejected.
           </p>
-          <div className="relative overflow-x-auto">
+          <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Schema fields (scrollable)">
             <table className="w-full min-w-[560px] text-left">
               <thead className="text-xs uppercase tracking-wide text-muted">
                 <tr><th scope="col" className="py-2 pr-3">Field</th><th scope="col" className="py-2 pr-3">Type</th><th scope="col" className="py-2">Notes</th></tr>
@@ -102,8 +151,8 @@ export function Docs() {
               </tbody>
             </table>
           </div>
-          <p>Validation rejects duplicate span IDs, missing parents, parent cycles, mismatched trace IDs, negative durations and non-numeric times, and names the span at fault. It warns, without rejecting, when a child extends outside its parent or when there are several roots.</p>
-          <pre className="overflow-x-auto rounded-lg border border-line bg-navy p-3 text-xs"><code>{EXAMPLE}</code></pre>
+          <p>Validation rejects duplicate span IDs, missing parents, parent cycles, mismatched trace IDs, negative durations and non-numeric or infinite times, and names the span at fault. It warns, without rejecting, when a child extends outside its parent, when there are several roots, or when the trace spans more than 24 hours (usually a sign of mixed time units).</p>
+          <pre tabIndex={0} aria-label="Example trace document" className="overflow-x-auto rounded-lg border border-line bg-navy p-3 text-xs"><code>{EXAMPLE}</code></pre>
           <p>
             Attribute names follow OpenTelemetry semantic conventions where possible. Both current and older names are recognised, for example{' '}
             <code>db.system.name</code> and <code>db.system</code>, or <code>http.response.status_code</code> and <code>http.status_code</code>.
@@ -142,9 +191,9 @@ export function Docs() {
           <ul>
             <li>It analyses one trace at a time. It does not compute latency percentiles across many requests.</li>
             <li>Insights only see what is instrumented. Uninstrumented code, queues or services can be the true cause.</li>
-            <li>OpenTelemetry OTLP JSON import is not supported yet. Convert traces with the script in the <Link to="/analyze/sdk">SDK guide</Link>.</li>
+            <li>OTLP protobuf (binary) files are not supported; export OTLP JSON instead. Partial traces with missing parents are rejected.</li>
             <li>There is no live monitoring, alerting or trace storage.</li>
-            <li>The URL check is planned and not available. It will only ever report externally visible status and latency.</li>
+            <li>The URL check reports only what is visible from outside. It cannot check pages behind a login, local or private addresses, and it cannot explain server-internal causes. PageSpeed Insights results come from Google’s locations and test devices, not your users’.</li>
             <li>The four built-in examples are synthetic. They are not benchmarks or measurements.</li>
           </ul>
         </Section>
@@ -154,7 +203,10 @@ export function Docs() {
             <li>Traces are parsed and analysed in your browser. They are never sent to a server.</li>
             <li>Imported traces are kept in this browser tab’s session storage so a reload does not lose them. Closing the tab clears them, and you can remove them sooner on the Upload tab.</li>
             <li>Attribute values whose keys look sensitive (password, secret, token, authorization, cookie, API key, session, credential) are replaced with “[redacted]” on import.</li>
-            <li>The site has no login, no ads and no analytics that collect trace content.</li>
+            <li>The URL check sends the URL you enter to Google only when PageSpeed Insights is selected (Google’s privacy policy applies to that request). The browser probe sends requests from your browser to the URL you enter, without cookies or a referrer.</li>
+            <li>Your PageSpeed API key, if you enter one, stays in memory for that page and is never stored.</li>
+            <li>The only thing stored on your device besides imported traces is a flag that you have seen the walkthrough (local storage).</li>
+            <li>The site has no login, no ads, no cookies and no analytics.</li>
             <li>Still, remove secrets and personal data from traces before importing or sharing reports.</li>
           </ul>
         </Section>
@@ -163,7 +215,8 @@ export function Docs() {
           <ul>
             <li>Imported data is never executed. All values are rendered as text, never as HTML.</li>
             <li>File size, span count, string length and attribute count are limited to keep the browser responsive.</li>
-            <li>The app makes no network requests with trace data, and there is no server-side component in this release.</li>
+            <li>The app makes no network requests with trace data, and there is no server-side component, so there is nothing that can be made to fetch internal addresses (no SSRF surface). The URL check still refuses local and private targets before anything runs.</li>
+            <li>A Content Security Policy allows scripts and styles only from the site itself; connections are limited to https.</li>
             <li>Report vulnerabilities privately as described in SECURITY.md in the repository.</li>
           </ul>
         </Section>

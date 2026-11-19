@@ -1,6 +1,8 @@
 name: Deploy to GitHub Pages
-# Runs only when triggered manually, so nothing is published by accident.
+# Publishes main after every merge (main only changes through reviewed pull requests), or on demand.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -19,6 +21,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run typecheck
       - run: npm test
       - run: npm run build:pages
         env:

@@ -162,12 +162,15 @@ export function TraceView() {
                 Critical path only
               </label>
               {isFilterActive(filter) && <Button variant="ghost" onClick={() => setFilter(EMPTY_FILTER)}>Clear filters</Button>}
-              <Button variant="ghost" onClick={() => setCollapsed(new Set(analysis.ordered.filter((n) => n.children.length && n.parent).map((n) => n.span.spanId)))}>
-                Collapse all
-              </Button>
-              <Button variant="ghost" onClick={() => setCollapsed(new Set())} disabled={collapsed.size === 0}>
-                Expand all
-              </Button>
+              {collapsed.size === 0 ? (
+                analysis.ordered.some((n) => n.children.length && n.parent) && <Button variant="ghost" onClick={() => setCollapsed(new Set(analysis.ordered.filter((n) => n.children.length && n.parent).map((n) => n.span.spanId)))}>
+                  Collapse all
+                </Button>
+              ) : (
+                <Button variant="ghost" onClick={() => setCollapsed(new Set())}>
+                  Expand all
+                </Button>
+              )}
             </div>
           </div>
           <Waterfall analysis={analysis} selectedId={selectedId} onSelect={select} collapsed={collapsed} onToggle={toggle} filter={filter} />

@@ -4,7 +4,7 @@ import { serviceColors } from './Waterfall';
 export function ServiceTable({ analysis }: { analysis: TraceAnalysis }) {
   const colors = serviceColors(analysis);
   return (
-    <div className="relative overflow-x-auto">
+    <div className="relative overflow-x-auto focus-visible:ring-2 focus-visible:ring-cyan" tabIndex={0} role="region" aria-label="Time by service (scrollable)">
       <table className="w-full text-left text-sm">
         <caption className="sr-only">Time by service</caption>
         <thead className="text-xs uppercase tracking-wide text-muted">

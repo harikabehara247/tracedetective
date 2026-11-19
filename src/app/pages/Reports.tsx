@@ -91,7 +91,7 @@ export function Reports() {
 
           <Card>
             <h2 className="mb-3 text-lg font-semibold">Top critical-path contributors</h2>
-            <div className="relative overflow-x-auto">
+            <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Spans (scrollable)">
               <table className="w-full min-w-[480px] text-left text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted">
                   <tr>

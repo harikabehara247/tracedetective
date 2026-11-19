@@ -123,7 +123,7 @@ export function Compare() {
                 </label>
               </div>
             </div>
-            <div className="relative overflow-x-auto">
+            <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Matched spans (scrollable)">
               <table className="w-full min-w-[640px] text-left text-sm">
                 <caption className="sr-only">Duration of each matched span in the baseline and current trace</caption>
                 <thead className="text-xs uppercase tracking-wide text-muted">
