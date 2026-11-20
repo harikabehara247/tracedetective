@@ -6,9 +6,9 @@ import { Tour, openTour } from './components/Tour';
 
 const NAV = [
   { to: '/', label: 'Home', end: true },
-  { to: '/analyze/url', label: '1 · Analyze a website' },
-  { to: '/reports', label: '2 · Reports' },
-  { to: '/analyze/upload', label: '3 · Investigate a trace' },
+  { to: '/analyze/url', label: 'Analyze a website', priority: '1' },
+  { to: '/reports', label: 'Reports', priority: '2' },
+  { to: '/analyze/upload', label: 'Investigate a trace', priority: '3' },
   { to: '/compare', label: 'Compare traces' },
   { to: '/examples', label: 'Explore examples' },
   { to: '/docs', label: 'Docs' },
@@ -30,7 +30,8 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
               }`
             }
           >
-            {n.label}
+              {n.priority && <span aria-hidden="true" className="mr-1 text-violet">{n.priority} ·</span>}
+              {n.label}
           </NavLink>
         </li>
       ))}

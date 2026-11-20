@@ -257,7 +257,9 @@ function Results({
   const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
   const result = run.psi.state === 'done' ? run.psi.result : null;
   const psi = result?.ok ? result.summary : null;
-  const probe = run.probe.state === 'ok' ? run.probe.summary : null;
+  const probeRun = params.compare ? runs[params.device] ?? run : run;
+  const probeState = probeRun.probe;
+  const probe = probeState.state === 'ok' ? probeState.summary : null;
   const findings = useMemo(() => (running ? [] : buildFindings(psi, probe, { platform: params.platform || undefined })), [running, psi, probe, params.platform]);
   const mobile = runs.mobile?.psi.state === 'done' && runs.mobile.psi.result.ok ? runs.mobile.psi.result.summary : null;
   const desktop = runs.desktop?.psi.state === 'done' && runs.desktop.psi.result.ok ? runs.desktop.psi.result.summary : null;
@@ -419,10 +421,10 @@ function Results({
           {mobile && desktop ? (
             <>
               <DeviceComparison mobile={mobile} desktop={desktop} />
-              <DiagnosisStart psi={mobile} strategy="mobile" findings={buildFindings(mobile, null, { platform: params.platform || undefined })} />
+              <DiagnosisStart psi={mobile} strategy="mobile" findings={buildFindings(mobile, runs.mobile?.probe.state === 'ok' ? runs.mobile.probe.summary : null, { platform: params.platform || undefined })} />
               <DiagnosisStart psi={desktop} strategy="desktop" findings={buildFindings(desktop, null, { platform: params.platform || undefined })} />
               <div className="grid items-start gap-4 lg:grid-cols-2">
-                <DetailedDeviceReport psi={mobile} strategy="mobile" findings={buildFindings(mobile, null, { platform: params.platform || undefined })} reportUrl={pageSpeedSiteUrl(run.url, 'mobile')} />
+                <DetailedDeviceReport psi={mobile} strategy="mobile" findings={buildFindings(mobile, runs.mobile?.probe.state === 'ok' ? runs.mobile.probe.summary : null, { platform: params.platform || undefined })} reportUrl={pageSpeedSiteUrl(run.url, 'mobile')} />
                 <DetailedDeviceReport psi={desktop} strategy="desktop" findings={buildFindings(desktop, null, { platform: params.platform || undefined })} reportUrl={pageSpeedSiteUrl(run.url, 'desktop')} />
               </div>
             </>
@@ -440,7 +442,7 @@ function Results({
         </>
       )}
 
-      {run.probe.state !== 'off' && <ProbeSection state={run.probe} count={PROBE_COUNT} />}
+      {probeState.state !== 'off' && <ProbeSection state={probeState} count={PROBE_COUNT} />}
       {!psi && !running && probe && findings.length > 0 && <Findings findings={findings} reportUrl={fullReport} />}
 
       {!running && (psi || probe) && (

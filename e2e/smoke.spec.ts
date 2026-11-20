@@ -23,14 +23,14 @@ test("unknown paths show the app's not-found page", async ({ page }) => {
   await page.goto('does-not-exist');
   await expect(page.getByRole('heading', { level: 1, name: 'Page not found' })).toBeVisible();
   await page.getByRole('link', { name: /home/i }).first().click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Why is this page slow?' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Find where a slow page loses time.' })).toBeVisible();
   expect(problems).toEqual([]);
 });
 
 test('navigation reaches every page', async ({ page }) => {
   await page.goto('./');
   const mobile = await page.getByRole('button', { name: 'Menu' }).isVisible();
-  for (const label of ['Analyze a website', 'Investigate a trace', 'Examples', 'Compare', 'Reports', 'Docs', 'About', 'Home']) {
+  for (const label of ['Analyze a website', 'Reports', 'Investigate a trace', 'Compare traces', 'Examples', 'Docs', 'About', 'Home']) {
     if (mobile) await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: label, exact: true }).click();
     await expect(page.locator('h1').first()).toBeVisible();
