@@ -19,7 +19,7 @@ export function Landing() {
     <div className="space-y-12">
       <section aria-labelledby="hero-h" className="relative isolate overflow-hidden rounded-3xl border border-violet/30 bg-gradient-to-br from-[#172449] via-[#121a31] to-[#171c39] p-5 shadow-xl md:p-8 lg:p-10">
         <div aria-hidden="true" className="pointer-events-none absolute -right-24 -top-32 -z-10 h-96 w-96 rounded-full bg-violet/20 blur-3xl" />
-        <div className="grid items-center gap-8 xl:grid-cols-[1.08fr_.92fr]">
+        <div className="grid items-end gap-8 xl:grid-cols-[1.08fr_.92fr]">
           <div>
             <p className="inline-flex rounded-full border border-cyan/40 bg-cyan/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-cyan">Priority 1 · Start with any public page</p>
             <h1 id="hero-h" className="mt-4 max-w-2xl text-4xl font-bold leading-tight tracking-tight md:text-5xl">Find where a slow page loses time.</h1>
@@ -77,6 +77,22 @@ export function Landing() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section aria-labelledby="case-study-h" className="rounded-3xl border border-cyan/25 bg-gradient-to-br from-[#111e32] via-surface to-[#1b1835] p-5 md:p-8">
+        <p className="text-xs font-bold uppercase tracking-wide text-cyan">The problem and our response</p>
+        <h2 id="case-study-h" className="mt-2 max-w-3xl text-2xl font-bold">A score says a page is slow. It does not always show a developer where to look next.</h2>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <article className="rounded-2xl border border-danger/30 bg-danger/5 p-5">
+            <h3 className="text-lg font-bold text-danger">The problem we identified</h3>
+            <p className="mt-2 text-sm text-muted">Performance reports contain useful measurements, but a first-time developer still has to connect the score to a visible page, a loading stage, a request and a practical first investigation.</p>
+          </article>
+          <article className="rounded-2xl border border-teal/30 bg-teal/5 p-5">
+            <h3 className="text-lg font-bold text-teal">What TraceDetective adds</h3>
+            <p className="mt-2 text-sm text-muted">It puts mobile and desktop evidence side by side, highlights the largest measured delay, links it to a file only when Lighthouse proves the match, ranks related checks, then guides a change-and-retest loop.</p>
+          </article>
+        </div>
+        <p className="mt-4 text-sm text-muted">A URL check investigates browser-visible performance. To prove which application function, API handler or database query is slow, bring an instrumented trace; the report does not guess at hidden causes.</p>
       </section>
 
       <section aria-labelledby="limits-h" className="grid gap-4 md:grid-cols-2">

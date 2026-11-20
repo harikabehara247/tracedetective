@@ -118,9 +118,9 @@ export function Summary({ psi, selectedPlatform, strategy = 'mobile' }: { psi: P
       <h3 id={`summary-${strategy}-h`} className="sr-only">
         {strategy} summary
       </h3>
-      <div className="grid gap-5 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center">
+      <div className="grid gap-4">
         <ScoreRing score={psi.performanceScore} />
-        <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <dl className="grid grid-cols-2 gap-3 text-sm">
           <Fact label="HTTP status" value={status === undefined ? '—' : String(status)} tone={status === undefined ? undefined : status >= 400 ? 'poor' : 'good'} />
           <Fact label="Redirects" value={redirects === 0 ? 'None' : String(redirects)} tone={redirects > 0 ? 'needs-improvement' : undefined} />
           <Fact label="Server response" value={fmtMs(psi.serverResponseMs)} tone={psi.serverResponseMs === undefined ? undefined : rateMetric('serverResponse', psi.serverResponseMs)} />
@@ -146,18 +146,18 @@ export function InterpretationGuide() {
       <p className="mt-1 text-sm text-muted">
         PageSpeed Insights provides the measurements. TraceDetective puts the most useful evidence next to each other so you can decide what to inspect first.
       </p>
-      <ol className="mt-3 grid gap-3 md:grid-cols-3">
+      <ol className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <li className="rounded-lg border border-line p-3">
-          <span className="text-sm font-semibold">1. See the delay</span>
-          <p className="mt-1 text-xs text-muted">A page screenshot and a visual split of the time until the main content appeared.</p>
+          <span className="text-sm font-semibold">1. Locate the slow stage</span>
+          <p className="mt-1 text-xs text-muted">Compare mobile and desktop screenshots, then see whether server response, resource discovery, download or rendering dominates LCP.</p>
         </li>
         <li className="rounded-lg border border-line p-3">
-          <span className="text-sm font-semibold">2. Find related evidence</span>
-          <p className="mt-1 text-xs text-muted">The LCP element, a linked file when Lighthouse proves the match, and requests ranked by duration or size.</p>
+          <span className="text-sm font-semibold">2. Follow the evidence</span>
+          <p className="mt-1 text-xs text-muted">See the LCP element, its file when Lighthouse proves the link, and requests ranked by duration, size, type or HTTP error.</p>
         </li>
         <li className="rounded-lg border border-line p-3">
-          <span className="text-sm font-semibold">3. Choose what to inspect</span>
-          <p className="mt-1 text-xs text-muted">Findings are grouped by loading stage and include evidence and a next check. Guesses are labelled as hypotheses.</p>
+          <span className="text-sm font-semibold">3. Take a first step</span>
+          <p className="mt-1 text-xs text-muted">A ranked checklist connects each finding to its measurement, evidence and a concrete next check. Guesses stay labelled as hypotheses.</p>
         </li>
       </ol>
       <p className="mt-3 text-xs text-muted">
@@ -192,18 +192,24 @@ export function DiagnosisStart({ psi, findings, strategy }: { psi: PsiSummary; f
       {stage?.stage === 'Resource download' && psi.lcp?.resourceUrl && (
         <p className="mt-3 break-all rounded-lg bg-surface/70 p-3 text-sm">Linked LCP file: <span className="font-mono text-xs">{shortPath(psi.lcp.resourceUrl)}</span>. Lighthouse linked this file to the main content.</p>
       )}
-      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-muted">Next developer step</p>
+      <ol className="mt-4 grid gap-3 md:grid-cols-3" aria-label={`${strategy} investigation steps`}>
+        <li className="rounded-xl border border-line bg-surface/70 p-3">
+          <span className="text-xs font-bold uppercase tracking-wide text-cyan">1 · Inspect the evidence</span>
+          <p className="mt-1 text-sm">{next ? next.title : 'Start with the measured LCP timing split.'}</p>
+          <a className="mt-2 inline-flex text-sm font-semibold text-cyan underline" href={`#where-time-went-${strategy}`}>Open time breakdown</a>
+        </li>
+        <li className="rounded-xl border border-line bg-surface/70 p-3">
+          <span className="text-xs font-bold uppercase tracking-wide text-warn">2 · Check the likely target</span>
           <p className="mt-1 text-sm">{nextStep}</p>
-          <p className="mt-1 text-xs text-muted">A slow stage narrows where to investigate; it does not prove a specific code or server cause.</p>
-        </div>
-        <nav aria-label={`${strategy} report sections`} className="flex flex-wrap gap-2 text-sm font-semibold">
-          <a className="rounded-lg border border-line bg-surface px-3 py-2" href={`#where-time-went-${strategy}`}>Time split</a>
-          <a className="rounded-lg border border-line bg-surface px-3 py-2" href={`#request-waterfall-${strategy}`}>Requests</a>
-          <a className="rounded-lg border border-line bg-surface px-3 py-2" href={`#next-steps-${strategy}`}>Fix checklist</a>
-        </nav>
-      </div>
+          <a className="mt-2 inline-flex text-sm font-semibold text-cyan underline" href={`#request-waterfall-${strategy}`}>Inspect requests</a>
+        </li>
+        <li className="rounded-xl border border-line bg-surface/70 p-3">
+          <span className="text-xs font-bold uppercase tracking-wide text-violet">3 · Change and verify</span>
+          <p className="mt-1 text-sm">Make one change, rerun the same device, and compare the new measurements before moving to another issue.</p>
+          <a className="mt-2 inline-flex text-sm font-semibold text-cyan underline" href={`#next-steps-${strategy}`}>Open ranked checks</a>
+        </li>
+      </ol>
+      <p className="mt-3 text-xs text-muted">The stage and request timings are measured. A possible code or server cause is a hypothesis until you verify it. A public URL cannot reveal private application code or database queries.</p>
     </Card>
   );
 }
