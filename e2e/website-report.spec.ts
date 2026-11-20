@@ -29,8 +29,12 @@ test('a share link opens the full report: time breakdown, findings, preview and 
   await expect(page.getByRole('heading', { name: 'What to check next' })).toBeVisible();
   await expect(page.getByText(/^Stage: /).first()).toBeVisible();
   await expect(page.getByRole('img', { name: /Final screenshot of/ })).toBeVisible();
+  await expect(page.getByText(/Largest measured delay:/)).toBeVisible();
+  await expect(page.getByRole('img', { name: /LCP .*Server response/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'From PageSpeed data to a developer starting point' })).toBeVisible();
   await expect(page.getByText('body > img.hero', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Requests' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Duration' })).toBeVisible();
   await expect(page.getByText('Chrome UX Report · 2026-10-21 to 2026-11-17')).toBeVisible();
   await noHorizontalScroll(page);
   expect(problems).toEqual([]);
@@ -39,7 +43,7 @@ test('a share link opens the full report: time breakdown, findings, preview and 
 test('switching to desktop keeps both results and compares them', async ({ page }) => {
   await page.goto('analyze/url?url=https%3A%2F%2Fdemo-site.example%2F&device=mobile');
   await expect(page.getByRole('heading', { name: 'Where the time went' })).toBeVisible({ timeout: 20_000 });
-  await page.getByRole('button', { name: /Test on desktop/ }).click();
+  await page.getByRole('group', { name: 'Choose report device' }).getByRole('button', { name: 'desktop' }).click();
   await expect(page).toHaveURL(/device=desktop/);
   await expect(page.getByText('Chrome UX Report · rolling 28 days')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('heading', { name: /Mobile and desktop/ })).toBeVisible();

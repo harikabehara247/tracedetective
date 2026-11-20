@@ -137,6 +137,36 @@ export function Summary({ psi, selectedPlatform }: { psi: PsiSummary; selectedPl
   );
 }
 
+export function InterpretationGuide() {
+  return (
+    <Card aria-labelledby="td-adds-h">
+      <SectionTitle id="td-adds-h" badge={<Badge tone="cyan">How this report helps</Badge>}>
+        From PageSpeed data to a developer starting point
+      </SectionTitle>
+      <p className="mt-1 text-sm text-muted">
+        PageSpeed Insights provides the measurements. TraceDetective puts the most useful evidence next to each other so you can decide what to inspect first.
+      </p>
+      <ol className="mt-3 grid gap-3 md:grid-cols-3">
+        <li className="rounded-lg border border-line p-3">
+          <span className="text-sm font-semibold">1. See the delay</span>
+          <p className="mt-1 text-xs text-muted">A page screenshot and a visual split of the time until the main content appeared.</p>
+        </li>
+        <li className="rounded-lg border border-line p-3">
+          <span className="text-sm font-semibold">2. Find related evidence</span>
+          <p className="mt-1 text-xs text-muted">The LCP element, a linked file when Lighthouse proves the match, and requests ranked by duration or size.</p>
+        </li>
+        <li className="rounded-lg border border-line p-3">
+          <span className="text-sm font-semibold">3. Choose what to inspect</span>
+          <p className="mt-1 text-xs text-muted">Findings are grouped by loading stage and include evidence and a next check. Guesses are labelled as hypotheses.</p>
+        </li>
+      </ol>
+      <p className="mt-3 text-xs text-muted">
+        This is an explained view of PageSpeed Insights and Chrome UX measurements, not a second benchmark. A public URL cannot reveal private API handlers, application code or database queries; investigate those with an instrumented trace.
+      </p>
+    </Card>
+  );
+}
+
 function PlatformLine({ detected, selected }: { detected: ReturnType<typeof detectPlatform>['detected']; selected: string }) {
   const selectedMissing = selected && !detected.some((d) => d.id === selected);
   return (
@@ -191,9 +221,14 @@ const STAGE_ORDER: FindingStage[] = ['Server response', 'Resource loading', 'Ren
 export function TimeBreakdown({ psi, findings, strategy }: { psi: PsiSummary; findings: WebsiteFinding[]; strategy: Strategy }) {
   const parts = psi.lcp?.subparts?.filter((p) => p.ms >= 0) ?? [];
   const total = parts.reduce((s, p) => s + p.ms, 0);
+  const longest = parts.slice().sort((a, b) => b.ms - a.ms)[0];
+  const longestMeta = longest ? STAGE_OF_SUBPART[longest.key] : undefined;
+  const linkedRequest = psi.lcp?.resourceUrl ? psi.requests?.find((r) => r.url === psi.lcp?.resourceUrl) : undefined;
+  const stageFindings = longestMeta
+    ? findings.filter((f) => f.stage === (longestMeta.stage === 'Resource download' || longestMeta.stage === 'Resource discovery' ? 'Resource loading' : longestMeta.stage))
+    : [];
   const byStage = new Map<FindingStage, WebsiteFinding[]>();
   for (const f of findings) byStage.set(f.stage, [...(byStage.get(f.stage) ?? []), f]);
-  let offset = 0;
   return (
     <Card aria-labelledby="time-h">
       <SectionTitle id="time-h" badge={parts.length > 0 ? <Badge>{psi.lcp?.subpartsBasis === 'observed' ? 'Lighthouse · observed' : 'Lighthouse · lab estimate'}</Badge> : undefined}>
@@ -202,29 +237,55 @@ export function TimeBreakdown({ psi, findings, strategy }: { psi: PsiSummary; fi
       {parts.length > 0 && total > 0 ? (
         <>
           <p className="mt-1 text-sm text-muted">
-            The time until the main content appeared (LCP, {fmtMs(total)}), split into the stages PageSpeed measured. The longest bar is usually the first place to look.
+            This is the time until the largest visible content appeared (LCP). Start with the largest segment; it is the biggest measured part of this test, not by itself proof of a code-level cause.
           </p>
-          <ol className="mt-4 space-y-3" aria-label="LCP stages">
-            {parts.map((p) => {
-              const meta = STAGE_OF_SUBPART[p.key] ?? { stage: p.label, color: 'bg-muted', explain: '' };
-              const left = (offset / total) * 100;
-              offset += p.ms;
-              return (
-                <li key={p.key} className="grid gap-1 sm:grid-cols-[11rem_minmax(0,1fr)_8rem] sm:items-center sm:gap-3">
-                  <span className="text-sm font-semibold">{meta.stage}</span>
-                  <span className="relative block h-4 rounded bg-navy" aria-hidden="true">
-                    <span className={`absolute inset-y-0 rounded ${meta.color}`} style={{ left: `${left}%`, width: `${Math.max(0.5, (p.ms / total) * 100)}%` }} />
-                  </span>
-                  <span className="whitespace-nowrap text-sm tabular-nums sm:text-right">
-                    {fmtMs(p.ms)} <span className="text-muted">({Math.round((p.ms / total) * 100)}%)</span>
-                  </span>
-                  <span className="text-xs text-muted sm:col-span-3">
-                    {meta.explain} PageSpeed name: {p.label}.
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
+          {longest && longestMeta && (
+            <div className="mt-4 rounded-xl border border-warn/50 bg-warn/5 p-4">
+              <p className="text-base font-semibold">Largest measured delay: {longestMeta.stage}</p>
+              <p className="mt-1 text-sm">
+                {fmtMs(longest.ms)} ({Math.round((longest.ms / total) * 100)}% of this LCP breakdown). {longestMeta.explain}
+              </p>
+              {longestMeta.stage === 'Resource download' && linkedRequest ? (
+                <p className="mt-2 break-all text-sm">
+                  Linked LCP file: <span className="font-mono text-xs">{shortPath(linkedRequest.url)}</span>
+                  {linkedRequest.transferSize !== undefined ? ` · ${fmtBytes(linkedRequest.transferSize)}` : ''}
+                  {` · ${fmtMs(linkedRequest.endMs - linkedRequest.startMs)} observed request time`}
+                </p>
+              ) : longestMeta.stage === 'Resource download' ? (
+                <p className="mt-2 text-sm">PageSpeed did not link a specific request to the LCP element, so this report will not guess which file caused it.</p>
+              ) : null}
+              {stageFindings.length > 0 && (
+                <p className="mt-2 text-sm">Related PageSpeed checks: {stageFindings.slice(0, 2).map((f) => f.title).join(' · ')}</p>
+              )}
+              <p className="mt-2 text-xs text-muted">
+                {psi.lcp?.subpartsBasis === 'observed' ? 'Observed by Lighthouse.' : 'Estimated by Lighthouse’s lab model.'} A public URL test cannot see server code, internal APIs or database queries.
+              </p>
+            </div>
+          )}
+          <div className="mt-4" aria-label="LCP time breakdown chart">
+            <div className="flex h-7 overflow-hidden rounded-lg bg-surface-2" role="img" aria-label={`LCP ${fmtMs(total)}: ${parts.map((p) => `${STAGE_OF_SUBPART[p.key]?.stage ?? p.label} ${fmtMs(p.ms)}, ${Math.round((p.ms / total) * 100)} percent`).join('; ')}`}>
+              {parts.map((p) => {
+                const meta = STAGE_OF_SUBPART[p.key] ?? { stage: p.label, color: 'bg-muted', explain: '' };
+                return <span key={p.key} className={`${meta.color} border-r border-navy/30 last:border-0`} style={{ width: `${Math.max(0.5, (p.ms / total) * 100)}%` }} />;
+              })}
+            </div>
+            <p className="mt-1 text-right text-xs font-semibold tabular-nums">Total LCP · {fmtMs(total)}</p>
+            <ol className="mt-3 grid gap-2 sm:grid-cols-2" aria-label="LCP stages">
+              {parts.map((p) => {
+                const meta = STAGE_OF_SUBPART[p.key] ?? { stage: p.label, color: 'bg-muted', explain: '' };
+                return (
+                  <li key={p.key} className="flex items-start gap-2 rounded-lg border border-line p-3">
+                    <span className={`mt-1 h-3 w-3 shrink-0 rounded-sm ${meta.color}`} aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold">{meta.stage}</span>
+                      <span className="block text-xs text-muted">{meta.explain}</span>
+                    </span>
+                    <span className="whitespace-nowrap text-sm font-semibold tabular-nums">{fmtMs(p.ms)} · {Math.round((p.ms / total) * 100)}%</span>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
         </>
       ) : (
         <p className="mt-2 text-sm text-muted">
@@ -639,6 +700,7 @@ function shortUrl(url: string, finalHost: string) {
 export function Waterfall({ psi }: { psi: PsiSummary }) {
   const all = psi.requests ?? [];
   const [type, setType] = useState('All');
+  const [focus, setFocus] = useState<'timeline' | 'longest' | 'largest' | 'fetch' | 'errors'>('timeline');
   const [showAll, setShowAll] = useState(false);
   const types = useMemo(() => ['All', ...[...new Set(all.map((r) => r.resourceType))].sort()], [all]);
   if (all.length === 0) {
@@ -656,7 +718,17 @@ export function Waterfall({ psi }: { psi: PsiSummary }) {
       return '';
     }
   })();
-  const rows = all.filter((r) => type === 'All' || r.resourceType === type).sort((a, b) => a.startMs - b.startMs);
+  const filtered = all.filter((r) => {
+    if (type !== 'All' && r.resourceType !== type) return false;
+    if (focus === 'fetch') return r.resourceType === 'Fetch' || r.resourceType === 'XHR';
+    if (focus === 'errors') return r.statusCode !== undefined && r.statusCode >= 400;
+    return true;
+  });
+  const rows = filtered.sort((a, b) => {
+    if (focus === 'longest') return (b.endMs - b.startMs) - (a.endMs - a.startMs);
+    if (focus === 'largest') return (b.transferSize ?? b.resourceSize ?? -1) - (a.transferSize ?? a.resourceSize ?? -1);
+    return a.startMs - b.startMs;
+  });
   const shown = showAll ? rows : rows.slice(0, 40);
   const end = Math.max(...all.map((r) => r.endMs), 1);
   const blocking = new Set((psi.insights ?? []).filter((i) => i.id === 'render-blocking-insight' || i.id === 'render-blocking-resources').flatMap((i) => i.items.map((it) => it.url)));
@@ -667,9 +739,17 @@ export function Waterfall({ psi }: { psi: PsiSummary }) {
         Requests
       </SectionTitle>
       <p className="mt-1 text-sm text-muted">
-        Every request Google’s test browser made, in order. Bar positions are the times Lighthouse observed before it simulated a slow connection, so they are shorter
-        than the lab metrics. Use them for order, size and type.
+        Requests observed in Google’s test browser. The timeline and durations below are observed request timings before Lighthouse’s slow-network simulation. Fetch/XHR rows show browser-visible calls; their presence alone does not prove they caused the delay.
       </p>
+      <div className="mt-3 flex flex-wrap gap-1" role="group" aria-label="Request view">
+        {([
+          ['timeline', 'Timeline'], ['longest', 'Longest'], ['largest', 'Largest'], ['fetch', 'API-like · Fetch/XHR'], ['errors', 'HTTP errors'],
+        ] as const).map(([key, label]) => (
+          <button key={key} type="button" aria-pressed={focus === key} onClick={() => { setFocus(key); setShowAll(false); }} className={`rounded-full border px-3 py-1 text-xs font-semibold ${focus === key ? 'border-cyan bg-cyan text-navy' : 'border-line text-muted hover:text-ink'}`}>
+            {label}{key === 'fetch' ? ` ${all.filter((r) => r.resourceType === 'Fetch' || r.resourceType === 'XHR').length}` : key === 'errors' ? ` ${all.filter((r) => r.statusCode !== undefined && r.statusCode >= 400).length}` : ''}
+          </button>
+        ))}
+      </div>
       <div className="mt-3 flex flex-wrap gap-1" role="group" aria-label="Filter by request type">
         {types.map((t) => (
           <button
@@ -690,6 +770,7 @@ export function Waterfall({ psi }: { psi: PsiSummary }) {
               <th scope="col" className="py-1 pr-2 font-semibold">Request</th>
               <th scope="col" className="py-1 pr-2 font-semibold">Type</th>
               <th scope="col" className="py-1 pr-2 text-right font-semibold">Size</th>
+              <th scope="col" className="py-1 pr-2 text-right font-semibold">Duration</th>
               <th scope="col" className="py-1 pr-2 text-right font-semibold">Status</th>
               <th scope="col" className="w-[38%] py-1 font-semibold">Timing</th>
             </tr>
@@ -709,6 +790,7 @@ export function Waterfall({ psi }: { psi: PsiSummary }) {
                 </td>
                 <td className="py-1.5 pr-2">{r.resourceType}</td>
                 <td className="py-1.5 pr-2 text-right tabular-nums">{fmtBytes(r.transferSize)}</td>
+                <td className="py-1.5 pr-2 text-right tabular-nums">{fmtMs(r.endMs - r.startMs)}</td>
                 <td className={`py-1.5 pr-2 text-right tabular-nums ${r.statusCode !== undefined && r.statusCode >= 400 ? 'text-danger' : ''}`}>{r.statusCode ?? '—'}</td>
                 <td className="py-1.5">
                   <div className="relative h-3 rounded bg-surface-2" aria-hidden="true">
@@ -728,6 +810,7 @@ export function Waterfall({ psi }: { psi: PsiSummary }) {
           Show all {rows.length} requests
         </Button>
       )}
+      {rows.length === 0 && <p className="mt-3 text-sm text-muted">No requests match this view.</p>}
     </Card>
   );
 }
