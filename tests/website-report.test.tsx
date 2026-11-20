@@ -171,6 +171,6 @@ describe('trace onboarding', () => {
   it('states on the home page that a URL cannot identify code or database causes', () => {
     renderAt('/');
     expect(screen.getByText(/It cannot identify an\s+internal database query or code function/)).toBeInTheDocument();
-    expect(screen.getByText(/Paste a page URL\. Get a visual performance report and the next things to check\. No files or setup needed\./)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'From URL to next fix' })).toBeInTheDocument();
   });
 });

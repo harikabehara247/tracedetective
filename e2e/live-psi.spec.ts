@@ -11,12 +11,12 @@ test('a real analysis shows results or a clear explanation', async ({ page }, in
   await page.goto('analyze/url');
   await page.getByLabel('Website URL', { exact: true }).fill('example.com');
   await page.getByRole('button', { name: 'Analyze Website' }).click();
-  const lab = page.getByRole('heading', { name: 'Lab test', exact: true });
+  const lab = page.getByRole('heading', { name: 'Lab test', exact: true }).first();
   const problem = page.getByRole('alert').getByRole('heading');
   await expect(lab.or(problem)).toBeVisible({ timeout: 120_000 });
   if (await lab.isVisible()) {
-    await expect(page.getByRole('heading', { name: 'Real users', exact: true })).toBeVisible();
-    await expect(page.getByRole('rowheader', { name: 'Performance score' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Mobile and desktop side by side' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Real users', exact: true }).first()).toBeVisible();
     info.annotations.push({ type: 'result', description: 'Lab results received' });
   } else {
     const text = (await page.getByRole('alert').innerText()).trim();

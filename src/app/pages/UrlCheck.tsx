@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { TOOL, buildFindings, detectPlatform, normalizeUrl, runBrowserProbe, runPageSpeed, type PageSpeedResult, type ProbeSample, type Strategy } from '../../core';
 import { SITE } from '../config';
 import { Button, Card, downloadJson } from '../ui';
 import { UrlForm, parseCheckParams, reportPath, type CheckParams } from '../website/UrlForm';
+import { readWebsiteReports, saveWebsiteReport } from '../website/savedReports';
 import {
   Boundary,
+  DiagnosisStart,
   DeviceComparison,
   Findings,
   InterpretationGuide,
@@ -55,8 +57,12 @@ export function UrlCheck() {
   const startedKey = useRef('');
   const resultsRef = useRef<HTMLHeadingElement>(null);
 
-  const device: Strategy = params?.device ?? 'mobile';
-  const run = runs[device];
+  const requestedDevice: Strategy = params?.device ?? 'mobile';
+  const requestedRun = runs[requestedDevice];
+  const otherRun = runs[requestedDevice === 'mobile' ? 'desktop' : 'mobile'];
+  const requestedFailed = requestedRun?.psi.state === 'done' && !requestedRun.psi.result.ok;
+  const run = params?.compare && requestedFailed && otherRun?.psi.state === 'done' && otherRun.psi.result.ok ? otherRun : requestedRun;
+  const device: Strategy = run?.strategy ?? requestedDevice;
   const runDevices: Strategy[] = params?.compare ? ['mobile', 'desktop'] : [device];
   const running = runDevices.some((strategy) => {
     const current = runs[strategy];
@@ -69,7 +75,24 @@ export function UrlCheck() {
     return () => clearInterval(t);
   }, [running, run]);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(() => {
+    if (!params) return;
+    const strategies: Strategy[] = params.compare ? ['mobile', 'desktop'] : [params.device];
+    const completed = strategies.map((strategy) => runs[strategy]).filter((item): item is Run => !!item && item.psi.state === 'done');
+    if (completed.length !== strategies.length || completed.length === 0) return;
+    const first = completed[0]!;
+    const reportId = `${first.url}|${first.startedAt.getTime()}`;
+    saveWebsiteReport({
+      id: reportId,
+      url: first.url,
+      host: first.host,
+      notes: first.notes,
+      startedAt: first.startedAt.toISOString(),
+      finishedAt: new Date(Math.max(...completed.map((item) => (item.finishedAt ?? new Date()).getTime()))).toISOString(),
+      params,
+      results: Object.fromEntries(completed.map((item) => [item.strategy, item.psi.state === 'done' ? item.psi.result : undefined])),
+    });
+  }, [runs, params]);
 
   const update = (strategy: Strategy, patch: Partial<Run>) => setRuns((rs) => (rs[strategy] ? { ...rs, [strategy]: { ...rs[strategy]!, ...patch } } : rs));
 
@@ -97,23 +120,40 @@ export function UrlCheck() {
     abortRef.current = ctrl;
     const strategies: Strategy[] = p.compare ? ['mobile', 'desktop'] : [p.device];
     const probeAllowed = p.probe && n.url.startsWith('https:');
+    const startedAt = new Date();
     setRuns((rs) => {
       // A different address clears old results. A comparison starts both device runs together.
       const keep = Object.fromEntries(Object.entries(rs).filter(([k, r]) => !strategies.includes(k as Strategy) && r?.url === n.url)) as Runs;
-      const startedAt = new Date();
       for (const strategy of strategies) {
         keep[strategy] = { url: n.url, host: n.host, notes: n.notes, strategy, startedAt, psi: { state: 'running' }, probe: probeAllowed && strategy === p.device ? { state: 'running', samples: [] } : { state: 'off' } };
       }
       return keep;
     });
     const timer = setTimeout(() => ctrl.abort(new DOMException('timeout', 'TimeoutError')), PSI_TIMEOUT_MS);
-    const psiTasks = strategies.map((strategy) =>
-      runPageSpeed(n.url, strategy, { proxyUrl: SITE.psiProxyUrl || undefined, signal: ctrl.signal, fresh })
-        .then((result) => update(strategy, { psi: cancelledRef.current ? { state: 'cancelled' } : { state: 'done', result } }))
-        .finally(() => update(strategy, { finishedAt: new Date() })),
-    );
+    const completedResults: Partial<Record<Strategy, PageSpeedResult>> = {};
+    const psiTasks = strategies.map(async (strategy) => {
+      try {
+        const result = await runPageSpeed(n.url, strategy, { proxyUrl: SITE.psiProxyUrl || undefined, signal: ctrl.signal, fresh });
+        completedResults[strategy] = result;
+        update(strategy, { psi: cancelledRef.current ? { state: 'cancelled' } : { state: 'done', result } });
+      } finally {
+        update(strategy, { finishedAt: new Date() });
+      }
+    });
     await Promise.allSettled([...psiTasks, probeAllowed ? probeTask(p.device, n.url) : Promise.resolve()]);
     clearTimeout(timer);
+    if (!cancelledRef.current && Object.keys(completedResults).length > 0) {
+      saveWebsiteReport({
+        id: `${n.url}|${startedAt.getTime()}`,
+        url: n.url,
+        host: n.host,
+        notes: n.notes,
+        startedAt: startedAt.toISOString(),
+        finishedAt: new Date().toISOString(),
+        params: p,
+        results: completedResults,
+      });
+    }
     requestAnimationFrame(() => resultsRef.current?.focus());
   };
 
@@ -217,12 +257,16 @@ function Results({
   const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
   const result = run.psi.state === 'done' ? run.psi.result : null;
   const psi = result?.ok ? result.summary : null;
-  const probe = run.probe.state === 'ok' ? run.probe.summary : null;
+  const probeRun = params.compare ? runs[params.device] ?? run : run;
+  const probeState = probeRun.probe;
+  const probe = probeState.state === 'ok' ? probeState.summary : null;
   const findings = useMemo(() => (running ? [] : buildFindings(psi, probe, { platform: params.platform || undefined })), [running, psi, probe, params.platform]);
   const mobile = runs.mobile?.psi.state === 'done' && runs.mobile.psi.result.ok ? runs.mobile.psi.result.summary : null;
   const desktop = runs.desktop?.psi.state === 'done' && runs.desktop.psi.result.ok ? runs.desktop.psi.result.summary : null;
   const pendingDevices = params.compare ? (['mobile', 'desktop'] as const).filter((strategy) => runs[strategy]?.psi.state === 'running') : run.psi.state === 'running' ? [run.strategy] : [];
   const fullReport = pageSpeedSiteUrl(run.url, run.strategy);
+  const savedReportId = `${run.url}|${run.startedAt.getTime()}`;
+  const reportSaved = !running && readWebsiteReports().some((saved) => saved.id === savedReportId);
 
   const copyLink = async () => {
     try {
@@ -280,6 +324,7 @@ function Results({
       pageSpeedError: result && !result.ok ? result.error : null,
       browserProbe: probe ?? (run.probe.state === 'off' ? 'not run' : run.probe),
       findings,
+      ...(params.compare ? { deviceResults: { mobile, desktop } } : {}),
     });
   };
 
@@ -309,6 +354,9 @@ function Results({
             <Button variant="primary" onClick={onFresh}>
               {params.compare ? 'Run both tests again' : 'Run a fresh test'}
             </Button>
+            {reportSaved ? (
+              <Link to={`/reports?website=${encodeURIComponent(savedReportId)}`} className="inline-flex items-center rounded-lg border border-cyan/60 bg-cyan/10 px-4 py-2 text-sm font-semibold text-ink no-underline hover:border-cyan hover:no-underline">Open in Reports</Link>
+            ) : <span role="status" className="self-center text-xs text-warn">This browser could not keep a session copy. Export the report before leaving.</span>}
             {!params.compare && <Button onClick={onCompareDevices}>Compare mobile + desktop</Button>}
             <Button onClick={() => void copyLink()}>Copy share link</Button>
             <Button onClick={exportReport}>Export Report</Button>
@@ -317,8 +365,11 @@ function Results({
             </Button>
           </div>
         )}
+        {running && (
+          <p className="no-print text-sm text-cyan">This run continues if you open another section. When both tests finish, its results will appear in <Link to="/reports" className="font-semibold underline">Reports</Link>.</p>
+        )}
       </div>
-      {!running && (
+      {!running && !params.compare && (
         <div className="rounded-xl border border-line bg-surface-2/50 p-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -355,26 +406,47 @@ function Results({
       )}
 
       {result && !result.ok && <PsiErrorCard url={run.url} strategy={run.strategy} result={result} canProbe={run.probe.state === 'off' && run.url.startsWith('https:')} onRetry={onRetry} onProbe={onProbe} />}
+      {params.compare && (['mobile', 'desktop'] as const).map((strategy) => {
+        const failed = runs[strategy]?.psi;
+        if (strategy === run.strategy || failed?.state !== 'done' || failed.result.ok) return null;
+        return <Card key={strategy} className="border-warn/60"><h3 className="font-semibold capitalize">{strategy} test needs attention</h3><p className="mt-1 text-sm">{failed.result.error.message}</p><Button className="mt-3" onClick={onRetry}>Try both tests again</Button></Card>;
+      })}
       {run.psi.state === 'cancelled' && <p className="text-sm text-muted">Cancelled.</p>}
 
       {psi && !running && (
         <>
-          <Card>
-            <Verdict psi={psi} findings={findings} />
-          </Card>
-          <Summary psi={psi} selectedPlatform={params.platform} />
+          {!params.compare && <Card><Verdict psi={psi} findings={findings} /></Card>}
+          {!params.compare && <Summary psi={psi} selectedPlatform={params.platform} />}
           <InterpretationGuide />
-          {mobile && desktop && <DeviceComparison mobile={mobile} desktop={desktop} />}
-          <Preview psi={psi} strategy={run.strategy} />
-          <TimeBreakdown psi={psi} findings={findings} strategy={run.strategy} />
-          <LcpSection psi={psi} strategy={run.strategy} />
-          <Waterfall psi={psi} />
-          <Findings findings={findings} reportUrl={fullReport} />
-          <Metrics psi={psi} strategy={run.strategy} />
+          {mobile && desktop ? (
+            <>
+              <DeviceComparison mobile={mobile} desktop={desktop} />
+              <div className="grid items-start gap-4 lg:grid-cols-2">
+                <Summary psi={mobile} selectedPlatform={params.platform} strategy="mobile" />
+                <Summary psi={desktop} selectedPlatform={params.platform} strategy="desktop" />
+              </div>
+              <DiagnosisStart psi={mobile} strategy="mobile" findings={buildFindings(mobile, runs.mobile?.probe.state === 'ok' ? runs.mobile.probe.summary : null, { platform: params.platform || undefined })} />
+              <DiagnosisStart psi={desktop} strategy="desktop" findings={buildFindings(desktop, null, { platform: params.platform || undefined })} />
+              <div className="grid items-start gap-4 lg:grid-cols-2">
+                <DetailedDeviceReport psi={mobile} strategy="mobile" findings={buildFindings(mobile, runs.mobile?.probe.state === 'ok' ? runs.mobile.probe.summary : null, { platform: params.platform || undefined })} reportUrl={pageSpeedSiteUrl(run.url, 'mobile')} />
+                <DetailedDeviceReport psi={desktop} strategy="desktop" findings={buildFindings(desktop, null, { platform: params.platform || undefined })} reportUrl={pageSpeedSiteUrl(run.url, 'desktop')} />
+              </div>
+            </>
+          ) : (
+            <>
+              <DiagnosisStart psi={psi} strategy={run.strategy} findings={findings} />
+              <Preview psi={psi} strategy={run.strategy} />
+              <TimeBreakdown psi={psi} findings={findings} strategy={run.strategy} />
+              <LcpSection psi={psi} strategy={run.strategy} />
+              <Waterfall psi={psi} strategy={run.strategy} />
+              <Findings findings={findings} reportUrl={fullReport} strategy={run.strategy} />
+              <Metrics psi={psi} strategy={run.strategy} />
+            </>
+          )}
         </>
       )}
 
-      {run.probe.state !== 'off' && <ProbeSection state={run.probe} count={PROBE_COUNT} />}
+      {probeState.state !== 'off' && <ProbeSection state={probeState} count={PROBE_COUNT} />}
       {!psi && !running && probe && findings.length > 0 && <Findings findings={findings} reportUrl={fullReport} />}
 
       {!running && (psi || probe) && (
@@ -388,6 +460,19 @@ function Results({
           <Methodology strategy={run.strategy} probeCount={PROBE_COUNT} />
         </>
       )}
+    </section>
+  );
+}
+
+function DetailedDeviceReport({ psi, strategy, findings, reportUrl }: { psi: NonNullable<Extract<PageSpeedResult, { ok: true }>['summary']>; strategy: Strategy; findings: ReturnType<typeof buildFindings>; reportUrl: string }) {
+  return (
+    <section aria-labelledby={`detailed-${strategy}-title`} className="min-w-0 space-y-4">
+      <h3 id={`detailed-${strategy}-title`} className="text-lg font-bold capitalize">{strategy} evidence and fixes</h3>
+      <TimeBreakdown psi={psi} findings={findings} strategy={strategy} />
+      <LcpSection psi={psi} strategy={strategy} />
+      <Waterfall psi={psi} strategy={strategy} />
+      <Findings findings={findings} reportUrl={reportUrl} strategy={strategy} />
+      <Metrics psi={psi} strategy={strategy} />
     </section>
   );
 }

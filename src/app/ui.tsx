@@ -19,7 +19,7 @@ export function ButtonLink({ variant = 'secondary', className = '', ...props }: 
   return <Link className={`${base} ${variants[variant]} ${className}`} {...props} />;
 }
 
-export function Card({ children, className = '', as: As = 'section', ...rest }: { children: ReactNode; className?: string; as?: 'section' | 'div' | 'article'; 'aria-labelledby'?: string }) {
+export function Card({ children, className = '', as: As = 'section', ...rest }: { children: ReactNode; className?: string; as?: 'section' | 'div' | 'article'; id?: string; 'aria-labelledby'?: string }) {
   return (
     <As className={`print-plain rounded-2xl border border-line bg-surface p-5 ${className}`} {...rest}>
       {children}

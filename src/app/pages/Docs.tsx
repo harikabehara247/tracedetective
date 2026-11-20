@@ -242,7 +242,7 @@ export function Docs() {
             <li>Attribute values whose keys look sensitive (password, secret, token, authorization, cookie, API key, session, credential) are replaced with “[redacted]” on import.</li>
             <li>Website analysis sends the address you enter to Google PageSpeed Insights (Google’s privacy policy applies){SITE.psiProxyUrl ? ', through the TraceDetective analysis service. The service uses your IP address only to count tests per minute, keeps each result for 15 minutes so repeat tests are fast, and writes no request logs' : ''}. You never enter an API key.</li>
             <li>The optional browser probe sends requests from your browser to the address you enter, without cookies or a referrer.</li>
-            <li>The only thing stored on your device besides imported traces is a flag that you have seen the walkthrough (local storage). Website reports are not stored; the share link holds only the address and options.</li>
+            <li>Completed website analyses are stored temporarily in this browser tab’s session so they remain available when you move between Analyze, Compare and Reports. They are not uploaded, and the session copy is cleared when the tab session ends. Share links contain only the address and options.</li>
             <li>The site has no login, no ads, no cookies and no analytics.</li>
             <li>Still, remove secrets and personal data from traces before importing or sharing reports.</li>
           </ul>

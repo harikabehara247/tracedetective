@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { buildComparisonReport, compareTraces, formatMs, formatSignedMs, formatSignedPct, type MatchedSpan } from '../../core';
+import { buildComparisonReport, compareTraces, formatMs, formatSignedMs, formatSignedPct, safeImageData, type MatchedSpan, type PsiSummary } from '../../core';
 import { TraceSelect } from '../components/TraceSelect';
 import { sampleTraceId, useTraces } from '../store';
 import { Button, Card, PageHeader, Stat, StatusBadge, downloadJson, useDocumentTitle } from '../ui';
+import { readWebsiteReports, type SavedWebsiteReport } from '../website/savedReports';
 
 type SortKey = 'delta' | 'pct' | 'name';
 
@@ -13,6 +14,11 @@ export function Compare() {
   const [params, setParams] = useSearchParams();
   const baselineId = params.get('baseline') ?? sampleTraceId('healthy-order');
   const currentId = params.get('current') ?? sampleTraceId('slow-database');
+  const siteAId = params.get('siteA');
+  const siteBId = params.get('siteB');
+  const savedSites = useMemo(() => readWebsiteReports(), []);
+  const siteA = savedSites.find((report) => report.id === siteAId);
+  const siteB = savedSites.find((report) => report.id === siteBId);
   const baseline = get(baselineId);
   const current = get(currentId);
   const [sort, setSort] = useState<SortKey>('delta');
@@ -39,6 +45,8 @@ export function Compare() {
 
   const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.deltaMs)));
 
+  if (siteAId || siteBId) return <WebsiteRunComparison baseline={siteA} current={siteB} />;
+
   return (
     <div>
       <PageHeader
@@ -58,8 +66,12 @@ export function Compare() {
           ) : undefined
         }
       >
-        Match spans between a baseline and a current trace of the same request, then see what got slower, what appeared and what started failing.
+        This page compares uploaded application traces. To compare website checks, select two saved runs in Reports; URL analyses are kept in this browser session.
       </PageHeader>
+
+      <Card className="mb-6 border-cyan/40 bg-cyan/5">
+        <p className="text-sm"><strong>Comparing a website load?</strong> <Link to="/reports" className="font-semibold text-cyan">Select two website runs in Reports →</Link> Compare mobile and desktop together with screenshots and measured delays.</p>
+      </Card>
 
       <Card className="mb-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-end">
@@ -179,6 +191,84 @@ export function Compare() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function WebsiteRunComparison({ baseline, current }: { baseline?: SavedWebsiteReport; current?: SavedWebsiteReport }) {
+  useDocumentTitle('Compare website reports');
+  if (!baseline || !current) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title="Website comparison unavailable" actions={<Link to="/reports" className="text-cyan">Back to Reports</Link>}>
+          One or both saved reports are missing from this browser session. Return to Reports and choose two completed website runs.
+        </PageHeader>
+        <Card><p className="text-sm text-muted">Website reports stay in the current browser tab session and are cleared when that session ends.</p></Card>
+      </div>
+    );
+  }
+  const devices = ['mobile', 'desktop'] as const;
+  const summary = (report: SavedWebsiteReport, device: (typeof devices)[number]): PsiSummary | null => {
+    const result = report.results[device];
+    return result?.ok ? result.summary : null;
+  };
+  const diffs = devices.map((device) => {
+    const a = summary(baseline, device);
+    const b = summary(current, device);
+    return { device, a, b };
+  });
+  const lcpMax = Math.max(1, ...diffs.flatMap(({ a, b }) => [a?.lcpMs ?? 0, b?.lcpMs ?? 0]));
+  const score = (psi: PsiSummary | null) => psi?.performanceScore === undefined ? '—' : String(Math.round(psi.performanceScore * 100));
+  const lcp = (psi: PsiSummary | null) => psi?.lcpMs === undefined ? '—' : formatMs(psi.lcpMs);
+  return (
+    <div className="space-y-5">
+      <PageHeader title="Compare website reports" actions={<Link to="/reports" className="text-cyan">All saved reports →</Link>}>
+        Compare two completed URL checks from this browser session. A smaller LCP and a higher performance score indicate a faster result in that lab run.
+      </PageHeader>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {[baseline, current].map((report, index) => (
+          <Card key={report.id} className={index === 1 ? 'border-violet/50' : 'border-cyan/40'}>
+            <p className="text-xs font-bold uppercase tracking-wide text-muted">{index === 0 ? 'Run A' : 'Run B'}</p>
+            <h2 className="mt-1 break-all font-mono text-sm font-semibold">{report.url}</h2>
+            <p className="mt-1 text-xs text-muted">{new Date(report.finishedAt).toLocaleString()}</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {devices.map((device) => {
+                const psi = summary(report, device);
+                return (
+                  <div key={device} className="rounded-xl border border-line bg-navy/60 p-3">
+                    <div className="flex items-center justify-between text-xs font-semibold capitalize"><span>{device}</span><span>Score {score(psi)}</span></div>
+                    {psi?.screenshot ? <img className="mt-2 max-h-36 w-full rounded-lg border border-line object-contain object-top" src={safeImageData(psi.screenshot.data)} alt={`${device} screenshot from ${report.url}`} /> : <p className="mt-2 rounded-lg border border-line p-3 text-xs text-muted">No screenshot returned.</p>}
+                    <p className="mt-2 text-xs">Largest content appeared · <strong>{lcp(psi)}</strong></p>
+                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-2" aria-label={`${device} LCP ${lcp(psi)}`}><div className={`h-full rounded-full ${device === 'mobile' ? 'bg-warn' : 'bg-cyan'}`} style={{ width: `${Math.max(1, ((psi?.lcpMs ?? 0) / lcpMax) * 100)}%` }} /></div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        ))}
+      </div>
+      <Card>
+        <h2 className="text-lg font-bold">What changed between runs</h2>
+        <p className="mt-1 text-sm text-muted">Positive LCP change means Run B took longer. These are separate Google lab runs, so network and test variation can affect the difference.</p>
+        <div className="mt-3 overflow-x-auto" role="region" aria-label="Website report metrics comparison" tabIndex={0}>
+          <table className="w-full min-w-[560px] text-left text-sm">
+            <thead className="text-xs text-muted"><tr><th className="py-2">Device / metric</th><th className="py-2 text-right">Run A</th><th className="py-2 text-right">Run B</th><th className="py-2 text-right">Change</th></tr></thead>
+            <tbody>
+              {diffs.flatMap(({ device, a, b }) => [
+                { label: `${device} · Largest Contentful Paint`, av: a?.lcpMs, bv: b?.lcpMs, format: (value?: number) => value === undefined ? '—' : formatMs(value) },
+                { label: `${device} · Performance score`, av: a?.performanceScore === undefined ? undefined : Math.round(a.performanceScore * 100), bv: b?.performanceScore === undefined ? undefined : Math.round(b.performanceScore * 100), format: (value?: number) => value === undefined ? '—' : String(value) },
+                { label: `${device} · Server response`, av: a?.serverResponseMs, bv: b?.serverResponseMs, format: (value?: number) => value === undefined ? '—' : formatMs(value) },
+              ].map((row) => {
+                const diff = row.av === undefined || row.bv === undefined ? undefined : row.bv - row.av;
+                const isScore = row.label.endsWith('Performance score');
+                const color = diff === undefined ? 'text-muted' : (isScore ? diff > 0 : diff < 0) ? 'text-teal' : diff === 0 ? 'text-muted' : 'text-danger';
+                return <tr key={row.label} className="border-t border-line/60"><th className="py-2 font-medium capitalize">{row.label}</th><td className="py-2 text-right tabular-nums">{row.format(row.av)}</td><td className="py-2 text-right tabular-nums">{row.format(row.bv)}</td><td className={`py-2 text-right tabular-nums ${color}`}>{diff === undefined ? '—' : `${diff > 0 ? '+' : ''}${row.format(diff)}`}</td></tr>;
+              }))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      <p className="text-xs text-muted">This comparison shows measured differences only. A URL test cannot identify private server code, API handlers or database queries.</p>
     </div>
   );
 }

@@ -94,29 +94,24 @@ export function UrlForm({ initial, running = false, onCancel, compact = false }:
         )}
       </div>
 
-      <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2" disabled={running}>
-        <legend className="sr-only">Test device</legend>
-        <span className="text-sm text-muted" aria-hidden="true">
-          Test as
-        </span>
-        <div className="inline-flex flex-wrap rounded-lg border border-line bg-navy p-1">
-          {(['mobile', 'desktop'] as const).map((d) => (
-            <label
-              key={d}
-              className={`cursor-pointer rounded-md px-3 py-1.5 text-sm font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-cyan ${
-                !compare && device === d ? 'bg-violet text-navy' : 'text-muted hover:text-ink'
-              }`}
-            >
-              <input type="radio" name="device-mode" value={d} checked={!compare && device === d} onChange={() => { setDevice(d); setCompare(false); }} className="sr-only" />
-              {d === 'mobile' ? 'Mobile' : 'Desktop'}
-            </label>
-          ))}
-          <label className={`cursor-pointer rounded-md px-3 py-1.5 text-sm font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-cyan ${compare ? 'bg-violet text-navy' : 'text-muted hover:text-ink'}`}>
-            <input type="radio" name="device-mode" value="both" checked={compare} onChange={() => setCompare(true)} className="sr-only" />
-            Mobile + Desktop
+      <fieldset className="space-y-2" disabled={running}>
+        <legend className="sr-only">Device comparison</legend>
+        <label className="flex items-start gap-3 rounded-lg border border-violet/50 bg-violet/10 p-3">
+          <input type="checkbox" checked={compare} onChange={(e) => setCompare(e.target.checked)} className="mt-1 accent-violet" />
+          <span>
+            <span className="block text-sm font-semibold">Run mobile and desktop together <span className="text-violet">Recommended</span></span>
+            <span className="mt-0.5 block text-xs text-muted">One click runs both lab tests and shows their previews, timings and problem areas side by side.</span>
+          </span>
+        </label>
+        {!compare && (
+          <label className="flex items-center gap-3 text-sm">
+            <span className="text-muted">Run one device only</span>
+            <select value={device} onChange={(e) => setDevice(e.target.value as Strategy)} className="rounded-lg border border-line bg-navy px-3 py-2">
+              <option value="mobile">Mobile</option>
+              <option value="desktop">Desktop</option>
+            </select>
           </label>
-        </div>
-        <span className="basis-full text-xs text-muted">{compare ? 'Run both lab tests together and compare their previews and timing side by side.' : 'Run one lab test; you can compare both devices later without re-entering the URL.'}</span>
+        )}
       </fieldset>
 
       {error ? (

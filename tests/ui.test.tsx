@@ -113,7 +113,7 @@ describe('website analysis', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Analyze Website' }));
   }
 
-  it('has no API key field and keeps device and browser probe under Advanced options', () => {
+  it('has no API key field and defaults to a paired device run', () => {
     renderAt('/analyze/url');
     expect(screen.queryByLabelText(/api key/i)).not.toBeInTheDocument();
     expect(screen.getAllByRole('textbox')).toHaveLength(1);
@@ -121,9 +121,8 @@ describe('website analysis', () => {
     expect(screen.queryByRole('checkbox', { name: /wordpress/i })).not.toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Platform-specific notes' })).toHaveValue('');
     expect(screen.getByText('Advanced options')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Mobile + Desktop' })).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'Mobile' })).not.toBeChecked();
-    expect(screen.getByRole('radio', { name: 'Desktop' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Run mobile and desktop together/ })).toBeChecked();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: /time the site from my browser/ })).not.toBeChecked();
     expect(screen.getByText(/CORS/)).toBeInTheDocument();
   });
@@ -142,7 +141,7 @@ describe('website analysis', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderAt('/analyze/url');
     await analyze('example.com');
-    expect(await screen.findByRole('heading', { name: /Server took 900 ms to start sending the page/ })).toBeInTheDocument();
+    expect((await screen.findAllByRole('heading', { name: /Server took 900 ms to start sending the page/ })).length).toBeGreaterThan(0);
     const called = new URL(String(fetchMock.mock.calls[0]![0]));
     expect(called.hostname).toBe('www.googleapis.com');
     expect(called.searchParams.get('url')).toBe('https://example.com/');
@@ -152,21 +151,21 @@ describe('website analysis', () => {
     expect(screen.getByRole('heading', { name: 'Mobile and desktop side by side' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'mobile', level: 4 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'desktop', level: 4 })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Lab test' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Lab test' })).toHaveLength(2);
     expect(screen.getAllByText('Lighthouse · simulated').length).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: 'Real users' })).toBeInTheDocument();
-    expect(screen.getByText(/Google publishes real-user data only for pages and sites with enough Chrome visits/)).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Performance score 72 out of 100' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Real users' })).toHaveLength(2);
+    expect(screen.getAllByText(/Google publishes real-user data only for pages and sites with enough Chrome visits/)).toHaveLength(2);
+    expect(screen.getAllByText(/score 72/).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Export Report' })).toBeInTheDocument();
   });
 
-  it('uses the analysis service when one is configured and runs the desktop test on request', async () => {
+  it('uses the analysis service when one is configured and can run only desktop when requested', async () => {
     site.psiProxyUrl = 'https://psi.example.workers.dev/';
     const fetchMock = vi.fn(async (_url: string) => json({ summary: { ...parsePsi(psiBody) }, cached: true, fetchedAt: '2026-11-19T06:00:00.000Z' }));
     vi.stubGlobal('fetch', fetchMock);
     renderAt('/analyze/url');
-    await userEvent.click(screen.getByText('Advanced options'));
-    await userEvent.click(screen.getByRole('radio', { name: 'Desktop' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: /Run mobile and desktop together/ }));
+    await userEvent.selectOptions(screen.getByLabelText('Run one device only'), 'desktop');
     await analyze('example.com');
     expect(await screen.findByRole('heading', { name: 'Lab test' })).toBeInTheDocument();
     const called = new URL(String(fetchMock.mock.calls[0]![0]));
@@ -180,8 +179,8 @@ describe('website analysis', () => {
     renderAt('/analyze/url');
     await analyze('example.com');
     expect(await screen.findByRole('heading', { name: 'The lab test is unavailable right now' })).toBeInTheDocument();
-    expect(screen.getByText(/quota is used up/)).toBeInTheDocument();
-    expect(screen.getByText(/No lab or real-user results are shown, because none were measured/)).toBeInTheDocument();
+    expect(screen.getAllByText(/quota is used up/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/No lab or real-user results are shown, because none were measured/).length).toBeGreaterThan(0);
     expect(screen.queryByRole('heading', { name: 'Lab test' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Real users' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();

@@ -56,7 +56,7 @@ test('platform notes appear only when chosen, and say the platform was not detec
   await page.getByRole('combobox', { name: 'Platform-specific notes' }).selectOption('wordpress');
   await page.getByRole('button', { name: 'Analyze Website' }).click();
   await expect(page).toHaveURL(/platform=wordpress/);
-  await expect(page.getByText(/WordPress notes added because you chose it \(not detected\)/)).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/WordPress notes added because you chose it \(not detected\)/).first()).toBeVisible({ timeout: 20_000 });
 });
 
 test('the report has no serious or critical axe-core violations', async ({ page }) => {
