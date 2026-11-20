@@ -16,7 +16,7 @@ test('a real analysis shows results or a clear explanation', async ({ page }, in
   await expect(lab.or(problem)).toBeVisible({ timeout: 120_000 });
   if (await lab.isVisible()) {
     await expect(page.getByRole('heading', { name: 'Real users', exact: true })).toBeVisible();
-    await expect(page.getByText('Performance score')).toBeVisible();
+    await expect(page.getByRole('rowheader', { name: 'Performance score' })).toBeVisible();
     info.annotations.push({ type: 'result', description: 'Lab results received' });
   } else {
     const text = (await page.getByRole('alert').innerText()).trim();
