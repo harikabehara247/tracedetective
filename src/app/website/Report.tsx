@@ -828,11 +828,55 @@ export function DeviceComparison({ mobile, desktop }: { mobile: PsiSummary; desk
     ['Cumulative Layout Shift', (p) => (p.cls === undefined ? '—' : p.cls.toFixed(3))],
     ['Server response', (p) => fmtMs(p.serverResponseMs)],
   ];
+  const totalLcp = (p: PsiSummary) => p.lcpMs ?? p.lcp?.subparts?.reduce((sum, part) => sum + part.ms, 0) ?? 0;
+  const sharedScaleMs = Math.max(totalLcp(mobile), totalLcp(desktop), 1);
+  const panel = (p: PsiSummary, strategy: Strategy) => {
+    const parts = p.lcp?.subparts ?? [];
+    return (
+      <section key={strategy} aria-labelledby={`device-${strategy}-h`} className="min-w-0 rounded-xl border border-line p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 id={`device-${strategy}-h`} className="text-base font-semibold capitalize">{strategy}</h4>
+          <span className="text-sm font-semibold tabular-nums">LCP {fmtMs(p.lcpMs)} · score {p.performanceScore === undefined ? '—' : Math.round(p.performanceScore * 100)}</span>
+        </div>
+        {p.screenshot ? (
+          <figure className="mt-3 overflow-hidden rounded-lg border border-line bg-navy">
+            <img src={safeImageData(p.screenshot.data)} alt={`${strategy} PageSpeed screenshot of ${p.finalUrl}`} className="block max-h-[300px] w-full object-contain object-top" />
+            <figcaption className="sr-only">Final {strategy} screenshot captured by Google’s lab test</figcaption>
+          </figure>
+        ) : (
+          <p className="mt-3 rounded-lg border border-line p-3 text-sm text-muted">No {strategy} screenshot was returned.</p>
+        )}
+        <div className="mt-3">
+          <p className="text-xs text-muted">LCP stages · shared scale across both devices (maximum {fmtMs(sharedScaleMs)})</p>
+          {parts.length > 0 ? (
+            <ul className="mt-2 space-y-2">
+              {parts.map((part) => {
+                const meta = STAGE_OF_SUBPART[part.key] ?? { stage: part.label, color: 'bg-muted', explain: '' };
+                return (
+                  <li key={part.key} className="grid grid-cols-[8rem_minmax(0,1fr)_4rem] items-center gap-2 text-xs">
+                    <span className="truncate" title={meta.stage}>{meta.stage}</span>
+                    <span className="block h-3 rounded bg-surface-2" aria-hidden="true">
+                      <span className={`block h-3 rounded ${meta.color}`} style={{ width: `${Math.max(0.5, (part.ms / sharedScaleMs) * 100)}%` }} />
+                    </span>
+                    <span className="text-right tabular-nums">{fmtMs(part.ms)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm text-muted">No LCP stage breakdown was returned for this run.</p>
+          )}
+        </div>
+      </section>
+    );
+  };
   return (
     <Card aria-labelledby="cmp-h">
       <SectionTitle id="cmp-h" badge={<Badge>Lab tests</Badge>}>
-        Mobile and desktop
+        Mobile and desktop side by side
       </SectionTitle>
+      <p className="mt-1 text-sm text-muted">Both tests use the same page URL. These are separate lab runs; the bars use one shared time scale so the stage lengths compare directly.</p>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">{panel(mobile, 'mobile')}{panel(desktop, 'desktop')}</div>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="text-muted">
