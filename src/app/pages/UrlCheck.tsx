@@ -4,7 +4,7 @@ import { TOOL, buildFindings, detectPlatform, normalizeUrl, runBrowserProbe, run
 import { SITE } from '../config';
 import { Button, Card, downloadJson } from '../ui';
 import { UrlForm, parseCheckParams, reportPath, type CheckParams } from '../website/UrlForm';
-import { saveWebsiteReport } from '../website/savedReports';
+import { readWebsiteReports, saveWebsiteReport } from '../website/savedReports';
 import {
   Boundary,
   DiagnosisStart,
@@ -263,6 +263,8 @@ function Results({
   const desktop = runs.desktop?.psi.state === 'done' && runs.desktop.psi.result.ok ? runs.desktop.psi.result.summary : null;
   const pendingDevices = params.compare ? (['mobile', 'desktop'] as const).filter((strategy) => runs[strategy]?.psi.state === 'running') : run.psi.state === 'running' ? [run.strategy] : [];
   const fullReport = pageSpeedSiteUrl(run.url, run.strategy);
+  const savedReportId = `${run.url}|${run.startedAt.getTime()}`;
+  const reportSaved = !running && readWebsiteReports().some((saved) => saved.id === savedReportId);
 
   const copyLink = async () => {
     try {
@@ -350,9 +352,9 @@ function Results({
             <Button variant="primary" onClick={onFresh}>
               {params.compare ? 'Run both tests again' : 'Run a fresh test'}
             </Button>
-            <Link to={`/reports?website=${encodeURIComponent(`${run.url}|${run.startedAt.getTime()}`)}`} className="inline-flex items-center rounded-lg border border-cyan/60 bg-cyan/10 px-4 py-2 text-sm font-semibold text-ink no-underline hover:border-cyan hover:no-underline">
-              Open in Reports
-            </Link>
+            {reportSaved ? (
+              <Link to={`/reports?website=${encodeURIComponent(savedReportId)}`} className="inline-flex items-center rounded-lg border border-cyan/60 bg-cyan/10 px-4 py-2 text-sm font-semibold text-ink no-underline hover:border-cyan hover:no-underline">Open in Reports</Link>
+            ) : <span role="status" className="self-center text-xs text-warn">This browser could not keep a session copy. Export the report before leaving.</span>}
             {!params.compare && <Button onClick={onCompareDevices}>Compare mobile + desktop</Button>}
             <Button onClick={() => void copyLink()}>Copy share link</Button>
             <Button onClick={exportReport}>Export Report</Button>

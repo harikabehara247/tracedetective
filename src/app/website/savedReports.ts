@@ -3,7 +3,7 @@ import type { CheckParams } from './UrlForm';
 
 const STORAGE_KEY = 'tracedetective.website-reports.v1';
 const MAX_REPORTS = 5;
-const MAX_STORAGE_CHARS = 3_800_000;
+const MAX_STORAGE_CHARS = 2_000_000;
 
 export interface SavedWebsiteReport {
   id: string;
