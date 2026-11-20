@@ -320,6 +320,7 @@ function Results({
       pageSpeedError: result && !result.ok ? result.error : null,
       browserProbe: probe ?? (run.probe.state === 'off' ? 'not run' : run.probe),
       findings,
+      ...(params.compare ? { deviceResults: { mobile, desktop } } : {}),
     });
   };
 
@@ -401,6 +402,11 @@ function Results({
       )}
 
       {result && !result.ok && <PsiErrorCard url={run.url} strategy={run.strategy} result={result} canProbe={run.probe.state === 'off' && run.url.startsWith('https:')} onRetry={onRetry} onProbe={onProbe} />}
+      {params.compare && (['mobile', 'desktop'] as const).map((strategy) => {
+        const failed = runs[strategy]?.psi;
+        if (strategy === run.strategy || failed?.state !== 'done' || failed.result.ok) return null;
+        return <Card key={strategy} className="border-warn/60"><h3 className="font-semibold capitalize">{strategy} test needs attention</h3><p className="mt-1 text-sm">{failed.result.error.message}</p><Button className="mt-3" onClick={onRetry}>Try both tests again</Button></Card>;
+      })}
       {run.psi.state === 'cancelled' && <p className="text-sm text-muted">Cancelled.</p>}
 
       {psi && !running && (

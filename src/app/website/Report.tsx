@@ -302,6 +302,14 @@ export function TimeBreakdown({ psi, findings, strategy }: { psi: PsiSummary; fi
               </p>
             </div>
           )}
+          <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted" aria-label="LCP chart color key">
+            {[
+              ['bg-cyan', 'Server response'],
+              ['bg-warn', 'Resource discovery'],
+              ['bg-violet', 'Resource download'],
+              ['bg-danger', 'Rendering'],
+            ].map(([color, label]) => <li key={label} className="flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-sm ${color}`} aria-hidden="true" />{label}</li>)}
+          </ul>
           <div className="mt-4" aria-label="LCP time breakdown chart">
             <div className="flex h-7 overflow-hidden rounded-lg bg-surface-2" role="img" aria-label={`LCP ${fmtMs(total)}: ${parts.map((p) => `${STAGE_OF_SUBPART[p.key]?.stage ?? p.label} ${fmtMs(p.ms)}, ${Math.round((p.ms / total) * 100)} percent`).join('; ')}`}>
               {parts.map((p) => {
