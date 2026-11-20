@@ -421,6 +421,10 @@ function Results({
           {mobile && desktop ? (
             <>
               <DeviceComparison mobile={mobile} desktop={desktop} />
+              <div className="grid items-start gap-4 lg:grid-cols-2">
+                <Summary psi={mobile} selectedPlatform={params.platform} strategy="mobile" />
+                <Summary psi={desktop} selectedPlatform={params.platform} strategy="desktop" />
+              </div>
               <DiagnosisStart psi={mobile} strategy="mobile" findings={buildFindings(mobile, runs.mobile?.probe.state === 'ok' ? runs.mobile.probe.summary : null, { platform: params.platform || undefined })} />
               <DiagnosisStart psi={desktop} strategy="desktop" findings={buildFindings(desktop, null, { platform: params.platform || undefined })} />
               <div className="grid items-start gap-4 lg:grid-cols-2">

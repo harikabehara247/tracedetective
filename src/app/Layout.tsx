@@ -10,7 +10,7 @@ const NAV = [
   { to: '/reports', label: 'Reports', priority: '2' },
   { to: '/analyze/upload', label: 'Investigate a trace', priority: '3' },
   { to: '/compare', label: 'Compare traces' },
-  { to: '/examples', label: 'Explore examples' },
+  { to: '/examples', label: 'Examples' },
   { to: '/docs', label: 'Docs' },
   { to: '/about', label: 'About' },
 ];

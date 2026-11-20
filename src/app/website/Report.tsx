@@ -109,14 +109,14 @@ function Fact({ label, value, tone, hint }: { label: string; value: ReactNode; t
   );
 }
 
-export function Summary({ psi, selectedPlatform }: { psi: PsiSummary; selectedPlatform: string }) {
+export function Summary({ psi, selectedPlatform, strategy = 'mobile' }: { psi: PsiSummary; selectedPlatform: string; strategy?: Strategy }) {
   const status = psi.mainDocument?.statusCode;
   const redirects = Math.max(0, psi.redirects.length - 1);
   const platform = detectPlatform(psi.requests ?? []);
   return (
-    <Card aria-labelledby="summary-h">
-      <h3 id="summary-h" className="sr-only">
-        Summary
+    <Card aria-labelledby={`summary-${strategy}-h`}>
+      <h3 id={`summary-${strategy}-h`} className="sr-only">
+        {strategy} summary
       </h3>
       <div className="grid gap-5 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center">
         <ScoreRing score={psi.performanceScore} />
