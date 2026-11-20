@@ -172,7 +172,8 @@ export function DiagnosisStart({ psi, findings, strategy }: { psi: PsiSummary; f
   const total = parts.reduce((sum, part) => sum + part.ms, 0);
   const largest = parts.slice().sort((a, b) => b.ms - a.ms)[0];
   const stage = largest ? STAGE_OF_SUBPART[largest.key] : undefined;
-  const next = findings[0];
+  const relatedStage = stage?.stage === 'Resource discovery' || stage?.stage === 'Resource download' ? 'Resource loading' : stage?.stage;
+  const next = findings.find((finding) => finding.stage === relatedStage) ?? findings[0];
   const stageText = stage
     ? `${stage.stage} took ${fmtMs(largest!.ms)} (${Math.round((largest!.ms / (total || 1)) * 100)}% of the measured LCP breakdown).`
     : next?.title ?? 'Review the measured findings below.';
