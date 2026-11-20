@@ -417,7 +417,6 @@ function Results({
         <>
           {!params.compare && <Card><Verdict psi={psi} findings={findings} /></Card>}
           {!params.compare && <Summary psi={psi} selectedPlatform={params.platform} />}
-          <InterpretationGuide />
           {mobile && desktop ? (
             <>
               <DeviceComparison mobile={mobile} desktop={desktop} />
@@ -425,12 +424,15 @@ function Results({
                 <Summary psi={mobile} selectedPlatform={params.platform} strategy="mobile" />
                 <Summary psi={desktop} selectedPlatform={params.platform} strategy="desktop" />
               </div>
-              <DiagnosisStart psi={mobile} strategy="mobile" findings={buildFindings(mobile, runs.mobile?.probe.state === 'ok' ? runs.mobile.probe.summary : null, { platform: params.platform || undefined })} />
-              <DiagnosisStart psi={desktop} strategy="desktop" findings={buildFindings(desktop, null, { platform: params.platform || undefined })} />
+              <div className="grid items-stretch gap-4 lg:grid-cols-2">
+                <DiagnosisStart psi={mobile} strategy="mobile" findings={buildFindings(mobile, runs.mobile?.probe.state === 'ok' ? runs.mobile.probe.summary : null, { platform: params.platform || undefined })} />
+                <DiagnosisStart psi={desktop} strategy="desktop" findings={buildFindings(desktop, null, { platform: params.platform || undefined })} />
+              </div>
               <div className="grid items-start gap-4 lg:grid-cols-2">
                 <DetailedDeviceReport psi={mobile} strategy="mobile" findings={buildFindings(mobile, runs.mobile?.probe.state === 'ok' ? runs.mobile.probe.summary : null, { platform: params.platform || undefined })} reportUrl={pageSpeedSiteUrl(run.url, 'mobile')} />
                 <DetailedDeviceReport psi={desktop} strategy="desktop" findings={buildFindings(desktop, null, { platform: params.platform || undefined })} reportUrl={pageSpeedSiteUrl(run.url, 'desktop')} />
               </div>
+              <InterpretationGuide />
             </>
           ) : (
             <>
@@ -441,6 +443,7 @@ function Results({
               <Waterfall psi={psi} strategy={run.strategy} />
               <Findings findings={findings} reportUrl={fullReport} strategy={run.strategy} />
               <Metrics psi={psi} strategy={run.strategy} />
+              <InterpretationGuide />
             </>
           )}
         </>
