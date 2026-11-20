@@ -1,18 +1,27 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { buildTraceReport, describeSource, formatMs, formatPct, TOOL } from '../../core';
+import { buildFindings, buildTraceReport, describeSource, formatMs, formatPct, TOOL } from '../../core';
 import { Findings } from '../components/Findings';
 import { ServiceTable } from '../components/ServiceTable';
 import { TraceSelect } from '../components/TraceSelect';
 import { sampleTraceId, useTraces } from '../store';
-import { Button, Card, PageHeader, Stat, SyntheticBadge, downloadJson, useDocumentTitle } from '../ui';
+import { Button, ButtonLink, Card, PageHeader, Stat, SyntheticBadge, downloadJson, useDocumentTitle } from '../ui';
+import { DeviceComparison, DiagnosisStart, Findings as WebsiteFindings, LcpSection, Metrics, Preview, TimeBreakdown, Waterfall } from '../website/Report';
+import { readWebsiteReports, type SavedWebsiteReport } from '../website/savedReports';
 
 export function Reports() {
-  useDocumentTitle('Report');
+  useDocumentTitle('Reports');
   const { get } = useTraces();
   const [params, setParams] = useSearchParams();
   const traceId = params.get('trace') ?? sampleTraceId('slow-database');
   const loaded = get(traceId);
+  const websiteId = params.get('website');
+  const [websiteReports, setWebsiteReports] = useState(() => readWebsiteReports());
+  useEffect(() => {
+    const refresh = window.setInterval(() => setWebsiteReports(readWebsiteReports()), 1200);
+    return () => window.clearInterval(refresh);
+  }, []);
+  const selectedWebsite = websiteReports.find((report) => report.id === websiteId);
   const generatedAt = useMemo(() => new Date(), [traceId]);
 
   const pathRows = useMemo(() => {
@@ -21,10 +30,21 @@ export function Reports() {
     return [...a.ordered].filter((n) => n.criticalMs > 0).sort((x, y) => y.criticalMs - x.criticalMs).slice(0, 10);
   }, [loaded]);
 
+  if (websiteId) {
+    return selectedWebsite ? <SavedWebsiteReportView report={selectedWebsite} /> : (
+      <div className="space-y-4">
+        <PageHeader title="Website report not found" actions={<ButtonLink to="/reports">All reports</ButtonLink>}>
+          This result may have been cleared when the browser session ended or when its temporary storage was full.
+        </PageHeader>
+        <Card><ButtonLink to="/analyze/url" variant="primary">Analyze a website</ButtonLink></Card>
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
-        title="Report"
+        title="Reports"
         actions={
           loaded ? (
             <>
@@ -36,8 +56,10 @@ export function Reports() {
           ) : undefined
         }
       >
-        A printable summary of one trace with its evidence and provenance. Use your browser’s print dialog to save it as a PDF.
+        Website checks and uploaded trace reports. Website analyses are saved only in this browser tab’s session; they are not uploaded.
       </PageHeader>
+
+      <WebsiteReportList reports={websiteReports} />
 
       <div className="no-print mb-6 max-w-xl">
         <TraceSelect
@@ -125,6 +147,105 @@ export function Reports() {
           </p>
         </article>
       )}
+    </div>
+  );
+}
+
+function WebsiteReportList({ reports }: { reports: SavedWebsiteReport[] }) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const compareHref = `/compare?siteA=${encodeURIComponent(selected[0] ?? '')}&siteB=${encodeURIComponent(selected[1] ?? '')}`;
+  return (
+    <section aria-labelledby="saved-site-reports" className="mb-8">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 id="saved-site-reports" className="text-xl font-bold">Website analyses from this session</h2>
+          <p className="mt-1 text-sm text-muted">Switch between Analyze, Compare and Reports without losing these results. Up to five recent runs stay in this browser tab session only.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {selected.length === 2 && <ButtonLink to={compareHref} variant="secondary">Compare selected website runs</ButtonLink>}
+          <ButtonLink to="/analyze/url" variant="primary">Analyze another website</ButtonLink>
+        </div>
+      </div>
+      {reports.length === 0 ? (
+        <Card><p className="text-sm text-muted">No website analyses saved yet. Start a URL check and its completed results will appear here automatically.</p></Card>
+      ) : (
+        <ul className="grid gap-3 md:grid-cols-2">
+          {reports.map((report) => {
+            const devices = (['mobile', 'desktop'] as const).filter((device) => !!report.results[device]);
+            return (
+              <li key={report.id}>
+                <Card className="h-full">
+                  <label className="mb-2 flex items-center gap-2 text-xs font-semibold text-cyan">
+                    <input type="checkbox" checked={selected.includes(report.id)} disabled={!selected.includes(report.id) && selected.length >= 2} onChange={(event) => setSelected((current) => event.target.checked ? [...current, report.id].slice(-2) : current.filter((id) => id !== report.id))} className="accent-cyan" />
+                    Select to compare
+                  </label>
+                  <p className="break-all font-mono text-sm font-semibold">{report.url}</p>
+                  <p className="mt-1 text-xs text-muted">{devices.map((device) => device[0]!.toUpperCase() + device.slice(1)).join(' + ')} · {new Date(report.finishedAt).toLocaleString()}</p>
+                  <div className="mt-3"><ButtonLink to={`/reports?website=${encodeURIComponent(report.id)}`} variant="secondary">Open saved report</ButtonLink></div>
+                </Card>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function SavedWebsiteReportView({ report }: { report: SavedWebsiteReport }) {
+  const successes = (['mobile', 'desktop'] as const).flatMap((strategy) => {
+    const result = report.results[strategy];
+    return result?.ok ? [{ strategy, summary: result.summary }] : [];
+  });
+  const errors = (['mobile', 'desktop'] as const).flatMap((strategy) => {
+    const result = report.results[strategy];
+    return result && !result.ok ? [{ strategy, message: result.error.message }] : [];
+  });
+  const exportData = {
+    kind: 'website-analysis',
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    url: report.url,
+    startedAt: report.startedAt,
+    finishedAt: report.finishedAt,
+    deviceResults: report.results,
+    storage: 'This report is stored in this browser tab session only.',
+    limits: 'External PageSpeed measurements do not reveal application code, internal APIs or database queries.',
+  };
+  return (
+    <div className="space-y-5">
+      <PageHeader title="Saved website report" actions={
+        <div className="flex flex-wrap gap-2">
+          <ButtonLink to="/reports">All reports</ButtonLink>
+          <Button onClick={() => downloadJson(`tracedetective-${report.host}-${report.startedAt.slice(0, 10)}.json`, exportData)}>Export JSON</Button>
+          <Button variant="primary" onClick={() => window.print()}>Print or save as PDF</Button>
+        </div>
+      }>
+        This analysis stays in this browser tab’s session. You can move between the product pages and return here; ending the session clears its saved reports.
+      </PageHeader>
+      <Card>
+        <h2 className="break-all font-mono text-base font-semibold">{report.url}</h2>
+        <p className="mt-1 text-sm text-muted">Completed {new Date(report.finishedAt).toLocaleString()} · {successes.length} successful lab run{successes.length === 1 ? '' : 's'}.</p>
+      </Card>
+      {errors.map(({ strategy, message }) => <Card key={strategy} className="border-warn/60"><h2 className="font-semibold capitalize">{strategy} test did not complete</h2><p className="mt-1 text-sm">{message}</p></Card>)}
+      {successes.length === 2 && <DeviceComparison mobile={successes.find((x) => x.strategy === 'mobile')!.summary} desktop={successes.find((x) => x.strategy === 'desktop')!.summary} />}
+      {successes.map(({ strategy, summary }) => {
+        const findings = buildFindings(summary, null, { platform: report.params.platform || undefined });
+        const reportUrl = `https://pagespeed.web.dev/analysis?url=${encodeURIComponent(report.url)}&form_factor=${strategy}`;
+        return (
+          <article key={strategy} className="space-y-4" aria-labelledby={`saved-${strategy}-title`}>
+            <h2 id={`saved-${strategy}-title`} className="text-xl font-bold capitalize">{strategy} diagnosis</h2>
+            <DiagnosisStart psi={summary} strategy={strategy} findings={findings} />
+            <Preview psi={summary} strategy={strategy} />
+            <TimeBreakdown psi={summary} findings={findings} strategy={strategy} />
+            <LcpSection psi={summary} strategy={strategy} />
+            <Waterfall psi={summary} strategy={strategy} />
+            <WebsiteFindings findings={findings} reportUrl={reportUrl} strategy={strategy} />
+            <Metrics psi={summary} strategy={strategy} />
+          </article>
+        );
+      })}
+      <Card className="border-cyan/40 bg-cyan/5"><h2 className="font-semibold">What to do with this report</h2><p className="mt-1 text-sm">Start with the colored delay stage above, open its request evidence, then work through the ranked checks. The measurements point to where to investigate; verify the change in your own code and test again.</p></Card>
     </div>
   );
 }

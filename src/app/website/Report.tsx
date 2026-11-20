@@ -167,6 +167,46 @@ export function InterpretationGuide() {
   );
 }
 
+export function DiagnosisStart({ psi, findings, strategy }: { psi: PsiSummary; findings: WebsiteFinding[]; strategy: Strategy }) {
+  const parts = psi.lcp?.subparts?.filter((part) => part.ms >= 0) ?? [];
+  const total = parts.reduce((sum, part) => sum + part.ms, 0);
+  const largest = parts.slice().sort((a, b) => b.ms - a.ms)[0];
+  const stage = largest ? STAGE_OF_SUBPART[largest.key] : undefined;
+  const next = findings[0];
+  const stageText = stage
+    ? `${stage.stage} took ${fmtMs(largest!.ms)} (${Math.round((largest!.ms / (total || 1)) * 100)}% of the measured LCP breakdown).`
+    : next?.title ?? 'Review the measured findings below.';
+  const nextStep = next?.nextSteps[0] ?? 'Open the request waterfall and PageSpeed checks below, then verify the slowest item before changing code.';
+  const color = stage?.stage === 'Rendering' ? 'border-danger/60 bg-danger/10' : stage?.stage === 'Resource discovery' || stage?.stage === 'Resource download' ? 'border-warn/60 bg-warn/10' : 'border-cyan/50 bg-cyan/5';
+  return (
+    <Card id={`start-here-${strategy}`} className={`border-2 ${color}`} aria-labelledby={`start-here-title-${strategy}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-cyan">Start here · {strategy}</p>
+          <h3 id={`start-here-title-${strategy}`} className="mt-1 text-xl font-bold">{stage ? `First focus: ${stage.stage}` : 'First focus: the top ranked finding'}</h3>
+          <p className="mt-2 max-w-3xl text-sm">{stageText}</p>
+        </div>
+        <span className="rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold">Measured in this lab run</span>
+      </div>
+      {stage?.stage === 'Resource download' && psi.lcp?.resourceUrl && (
+        <p className="mt-3 break-all rounded-lg bg-surface/70 p-3 text-sm">Linked LCP file: <span className="font-mono text-xs">{shortPath(psi.lcp.resourceUrl)}</span>. Lighthouse linked this file to the main content.</p>
+      )}
+      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-muted">Next developer step</p>
+          <p className="mt-1 text-sm">{nextStep}</p>
+          <p className="mt-1 text-xs text-muted">A slow stage narrows where to investigate; it does not prove a specific code or server cause.</p>
+        </div>
+        <nav aria-label={`${strategy} report sections`} className="flex flex-wrap gap-2 text-sm font-semibold">
+          <a className="rounded-lg border border-line bg-surface px-3 py-2" href={`#where-time-went-${strategy}`}>Time split</a>
+          <a className="rounded-lg border border-line bg-surface px-3 py-2" href={`#request-waterfall-${strategy}`}>Requests</a>
+          <a className="rounded-lg border border-line bg-surface px-3 py-2" href={`#next-steps-${strategy}`}>Fix checklist</a>
+        </nav>
+      </div>
+    </Card>
+  );
+}
+
 function PlatformLine({ detected, selected }: { detected: ReturnType<typeof detectPlatform>['detected']; selected: string }) {
   const selectedMissing = selected && !detected.some((d) => d.id === selected);
   return (
@@ -230,8 +270,8 @@ export function TimeBreakdown({ psi, findings, strategy }: { psi: PsiSummary; fi
   const byStage = new Map<FindingStage, WebsiteFinding[]>();
   for (const f of findings) byStage.set(f.stage, [...(byStage.get(f.stage) ?? []), f]);
   return (
-    <Card aria-labelledby="time-h">
-      <SectionTitle id="time-h" badge={parts.length > 0 ? <Badge>{psi.lcp?.subpartsBasis === 'observed' ? 'Lighthouse · observed' : 'Lighthouse · lab estimate'}</Badge> : undefined}>
+    <Card id={`where-time-went-${strategy}`} aria-labelledby={`time-h-${strategy}`}>
+      <SectionTitle id={`time-h-${strategy}`} badge={parts.length > 0 ? <Badge>{psi.lcp?.subpartsBasis === 'observed' ? 'Lighthouse · observed' : 'Lighthouse · lab estimate'}</Badge> : undefined}>
         Where the time went
       </SectionTitle>
       {parts.length > 0 && total > 0 ? (
@@ -407,8 +447,8 @@ export function Metrics({ psi, strategy }: { psi: PsiSummary; strategy: Strategy
   ];
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card aria-labelledby="lab-h">
-        <SectionTitle id="lab-h" badge={<Badge>Lighthouse · simulated</Badge>}>
+      <Card aria-labelledby={`lab-${strategy}-h`}>
+        <SectionTitle id={`lab-${strategy}-h`} badge={<Badge>Lighthouse · simulated</Badge>}>
           Lab test
         </SectionTitle>
         <p className="mt-1 text-sm text-muted">
@@ -432,8 +472,8 @@ export function Metrics({ psi, strategy }: { psi: PsiSummary; strategy: Strategy
           </ul>
         )}
       </Card>
-      <Card aria-labelledby="field-h">
-        <SectionTitle id="field-h" badge={<Badge tone="teal">{psi.field?.period ? `Chrome UX Report · ${psi.field.period.first} to ${psi.field.period.last}` : 'Chrome UX Report · rolling 28 days'}</Badge>}>
+      <Card aria-labelledby={`field-${strategy}-h`}>
+        <SectionTitle id={`field-${strategy}-h`} badge={<Badge tone="teal">{psi.field?.period ? `Chrome UX Report · ${psi.field.period.first} to ${psi.field.period.last}` : 'Chrome UX Report · rolling 28 days'}</Badge>}>
           Real users
         </SectionTitle>
         {psi.field ? (
@@ -478,8 +518,8 @@ export function LcpSection({ psi, strategy }: { psi: PsiSummary; strategy: Strat
   const lcp = psi.lcp;
   const res = lcp?.resourceUrl ? psi.requests?.find((r) => r.url === lcp.resourceUrl) : undefined;
   return (
-    <Card aria-labelledby="lcp-h">
-      <SectionTitle id="lcp-h" badge={<Badge>Lighthouse · simulated</Badge>}>
+    <Card aria-labelledby={`lcp-${strategy}-h`}>
+      <SectionTitle id={`lcp-${strategy}-h`} badge={<Badge>Lighthouse · simulated</Badge>}>
         Main content: the LCP element
       </SectionTitle>
       {!lcp?.selector ? (
@@ -547,12 +587,12 @@ export function LcpSection({ psi, strategy }: { psi: PsiSummary; strategy: Strat
 
 const TOP_FINDINGS = 3;
 
-export function Findings({ findings, reportUrl }: { findings: WebsiteFinding[]; reportUrl: string }) {
+export function Findings({ findings, reportUrl, strategy = 'mobile' }: { findings: WebsiteFinding[]; reportUrl: string; strategy?: Strategy }) {
   const top = findings.slice(0, TOP_FINDINGS);
   const more = findings.slice(TOP_FINDINGS);
   return (
-    <Card aria-labelledby="findings-h">
-      <SectionTitle id="findings-h">What to check next</SectionTitle>
+    <Card id={`next-steps-${strategy}`} aria-labelledby={`findings-h-${strategy}`}>
+      <SectionTitle id={`findings-h-${strategy}`}>What to check next</SectionTitle>
       <p className="mt-1 text-sm text-muted">
         Ranked by severity, then by the time PageSpeed estimates is at stake. Each finding says what was measured and where it came from. Possible causes are marked as
         hypotheses.
@@ -697,7 +737,7 @@ function shortUrl(url: string, finalHost: string) {
   }
 }
 
-export function Waterfall({ psi }: { psi: PsiSummary }) {
+export function Waterfall({ psi, strategy = 'mobile' }: { psi: PsiSummary; strategy?: Strategy }) {
   const all = psi.requests ?? [];
   const [type, setType] = useState('All');
   const [focus, setFocus] = useState<'timeline' | 'longest' | 'largest' | 'fetch' | 'errors'>('timeline');
@@ -705,8 +745,8 @@ export function Waterfall({ psi }: { psi: PsiSummary }) {
   const types = useMemo(() => ['All', ...[...new Set(all.map((r) => r.resourceType))].sort()], [all]);
   if (all.length === 0) {
     return (
-      <Card aria-labelledby="wf-h">
-        <SectionTitle id="wf-h">Requests</SectionTitle>
+      <Card id={`request-waterfall-${strategy}`} aria-labelledby={`wf-h-${strategy}`}>
+        <SectionTitle id={`wf-h-${strategy}`}>Requests</SectionTitle>
         <p className="mt-2 text-sm text-muted">PageSpeed did not return the request list for this test.</p>
       </Card>
     );
@@ -734,8 +774,8 @@ export function Waterfall({ psi }: { psi: PsiSummary }) {
   const blocking = new Set((psi.insights ?? []).filter((i) => i.id === 'render-blocking-insight' || i.id === 'render-blocking-resources').flatMap((i) => i.items.map((it) => it.url)));
   const tag = (r: NetRequest) => [r.url === psi.lcp?.resourceUrl ? 'LCP' : '', blocking.has(r.url) ? 'Render-blocking' : ''].filter(Boolean);
   return (
-    <Card aria-labelledby="wf-h">
-      <SectionTitle id="wf-h" badge={<Badge tone="muted">Observed in the test</Badge>}>
+    <Card id={`request-waterfall-${strategy}`} aria-labelledby={`wf-h-${strategy}`}>
+      <SectionTitle id={`wf-h-${strategy}`} badge={<Badge tone="muted">Observed in the test</Badge>}>
         Requests
       </SectionTitle>
       <p className="mt-1 text-sm text-muted">
