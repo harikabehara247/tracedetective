@@ -121,8 +121,9 @@ describe('website analysis', () => {
     expect(screen.queryByRole('checkbox', { name: /wordpress/i })).not.toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Platform-specific notes' })).toHaveValue('');
     expect(screen.getByText('Advanced options')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /Mobile/ })).toBeChecked();
-    expect(screen.getByRole('radio', { name: /Desktop/ })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Mobile + Desktop' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Mobile' })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Desktop' })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: /time the site from my browser/ })).not.toBeChecked();
     expect(screen.getByText(/CORS/)).toBeInTheDocument();
   });
@@ -136,7 +137,7 @@ describe('website analysis', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('runs keyless against Google when no proxy is configured and labels lab and real-user data', async () => {
+  it('runs mobile and desktop together by default and labels lab and real-user data', async () => {
     const fetchMock = vi.fn(async (_url: string) => json(psiBody));
     vi.stubGlobal('fetch', fetchMock);
     renderAt('/analyze/url');
@@ -146,7 +147,11 @@ describe('website analysis', () => {
     expect(called.hostname).toBe('www.googleapis.com');
     expect(called.searchParams.get('url')).toBe('https://example.com/');
     expect(called.searchParams.has('key')).toBe(false);
-    expect(fetchMock).toHaveBeenCalledTimes(1); // the browser probe is off by default
+    expect(fetchMock).toHaveBeenCalledTimes(2); // both Lighthouse device profiles; browser probe stays off
+    expect(fetchMock.mock.calls.map(([url]) => new URL(String(url)).searchParams.get('strategy')).sort()).toEqual(['desktop', 'mobile']);
+    expect(screen.getByRole('heading', { name: 'Mobile and desktop side by side' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'mobile', level: 4 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'desktop', level: 4 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Lab test' })).toBeInTheDocument();
     expect(screen.getAllByText('Lighthouse · simulated').length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'Real users' })).toBeInTheDocument();
@@ -161,7 +166,7 @@ describe('website analysis', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderAt('/analyze/url');
     await userEvent.click(screen.getByText('Advanced options'));
-    await userEvent.click(screen.getByRole('radio', { name: /Desktop/ }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Desktop' }));
     await analyze('example.com');
     expect(await screen.findByRole('heading', { name: 'Lab test' })).toBeInTheDocument();
     const called = new URL(String(fetchMock.mock.calls[0]![0]));

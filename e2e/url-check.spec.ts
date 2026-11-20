@@ -50,7 +50,7 @@ test('asks only for a URL and a device: no API key, platform and probe under Adv
   await expect(page.getByRole('button', { name: 'Analyze Website' })).toBeVisible();
   await expect(page.getByRole('textbox')).toHaveCount(1);
   await expect(page.getByLabel(/api key/i)).toHaveCount(0);
-  await expect(page.getByRole('radio', { name: /Mobile/ })).toBeChecked();
+  await expect(page.getByRole('radio', { name: 'Mobile + Desktop' })).toBeChecked();
   await expect(page.getByRole('combobox', { name: 'Platform-specific notes' })).toBeHidden();
   await page.getByText('Advanced options').click();
   await expect(page.getByRole('combobox', { name: 'Platform-specific notes' })).toHaveValue('');
@@ -60,16 +60,28 @@ test('asks only for a URL and a device: no API key, platform and probe under Adv
 test('analyzes a website, separates lab and real-user data, and exports a report', async ({ page }) => {
   await page.goto('analyze/url');
   const outside: string[] = [];
+  const strategies = new Set<string>();
   page.on('request', (r) => { if (/^https?:\/\/example\.com/.test(r.url())) outside.push(r.url()); });
+  page.on('request', (r) => {
+    const u = new URL(r.url());
+    if (u.pathname.includes('pagespeed')) {
+      const strategy = u.searchParams.get('strategy');
+      if (strategy) strategies.add(strategy);
+    }
+  });
   await analyze(page, 'example.com');
   await expect(page.getByRole('heading', { name: /Server took 1.34 s to start sending the page/ })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('heading', { name: /redirect/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lab test', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Mobile and desktop side by side' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'mobile', level: 4 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'desktop', level: 4 })).toBeVisible();
   await expect(page.getByText('Lighthouse · simulated').first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Real users', exact: true })).toBeVisible();
   await expect(page.getByText(/Google publishes real-user data only/)).toBeVisible();
   await expect(page.getByText('How these numbers were measured')).toBeVisible();
   expect(outside).toEqual([]); // the browser probe is optional and off by default
+  expect([...strategies].sort()).toEqual(['desktop', 'mobile']);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export Report' }).click();
   const file = await download;

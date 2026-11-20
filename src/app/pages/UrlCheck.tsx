@@ -57,7 +57,11 @@ export function UrlCheck() {
 
   const device: Strategy = params?.device ?? 'mobile';
   const run = runs[device];
-  const running = !!run && (run.psi.state === 'running' || run.probe.state === 'running');
+  const runDevices: Strategy[] = params?.compare ? ['mobile', 'desktop'] : [device];
+  const running = runDevices.some((strategy) => {
+    const current = runs[strategy];
+    return !!current && (current.psi.state === 'running' || current.probe.state === 'running');
+  });
 
   useEffect(() => {
     if (!running || !run) return;
@@ -91,26 +95,32 @@ export function UrlCheck() {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    const strategy = p.device;
+    const strategies: Strategy[] = p.compare ? ['mobile', 'desktop'] : [p.device];
     const probeAllowed = p.probe && n.url.startsWith('https:');
     setRuns((rs) => {
-      // A different address clears results for the other device.
-      const keep = Object.fromEntries(Object.entries(rs).filter(([k, r]) => k !== strategy && r?.url === n.url)) as Runs;
-      return { ...keep, [strategy]: { url: n.url, host: n.host, notes: n.notes, strategy, startedAt: new Date(), psi: { state: 'running' }, probe: probeAllowed ? { state: 'running', samples: [] } : { state: 'off' } } };
+      // A different address clears old results. A comparison starts both device runs together.
+      const keep = Object.fromEntries(Object.entries(rs).filter(([k, r]) => !strategies.includes(k as Strategy) && r?.url === n.url)) as Runs;
+      const startedAt = new Date();
+      for (const strategy of strategies) {
+        keep[strategy] = { url: n.url, host: n.host, notes: n.notes, strategy, startedAt, psi: { state: 'running' }, probe: probeAllowed && strategy === p.device ? { state: 'running', samples: [] } : { state: 'off' } };
+      }
+      return keep;
     });
     const timer = setTimeout(() => ctrl.abort(new DOMException('timeout', 'TimeoutError')), PSI_TIMEOUT_MS);
-    const psiTask = runPageSpeed(n.url, strategy, { proxyUrl: SITE.psiProxyUrl || undefined, signal: ctrl.signal, fresh })
-      .then((result) => update(strategy, { psi: cancelledRef.current ? { state: 'cancelled' } : { state: 'done', result } }))
-      .finally(() => clearTimeout(timer));
-    await Promise.allSettled([psiTask, probeAllowed ? probeTask(strategy, n.url) : Promise.resolve()]);
-    update(strategy, { finishedAt: new Date() });
+    const psiTasks = strategies.map((strategy) =>
+      runPageSpeed(n.url, strategy, { proxyUrl: SITE.psiProxyUrl || undefined, signal: ctrl.signal, fresh })
+        .then((result) => update(strategy, { psi: cancelledRef.current ? { state: 'cancelled' } : { state: 'done', result } }))
+        .finally(() => update(strategy, { finishedAt: new Date() })),
+    );
+    await Promise.allSettled([...psiTasks, probeAllowed ? probeTask(p.device, n.url) : Promise.resolve()]);
+    clearTimeout(timer);
     requestAnimationFrame(() => resultsRef.current?.focus());
   };
 
   // The address is the source of truth: opening /analyze/url?url=…&device=… runs the check.
   useEffect(() => {
     if (!params) return;
-    const key = `${params.url}|${params.device}|${params.probe}|${nonce}`;
+    const key = `${params.url}|${params.device}|${params.compare}|${params.probe}|${nonce}`;
     if (startedKey.current === key) return;
     const existing = runs[params.device];
     startedKey.current = key;
@@ -131,6 +141,10 @@ export function UrlCheck() {
     if (!params || next === device) return;
     if (runs[next]?.psi.state === 'done') navigate(reportPath({ ...params, device: next }));
     else go({ ...params, device: next });
+  };
+
+  const compareDevices = () => {
+    if (params) go({ ...params, compare: true });
   };
 
   return (
@@ -163,6 +177,7 @@ export function UrlCheck() {
             void probeTask(device, run.url).then(() => update(device, { finishedAt: new Date() }));
           }}
           onSelectDevice={selectDevice}
+          onCompareDevices={compareDevices}
           shareUrl={`${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, '')}${reportPath(params)}`}
         />
       )}
@@ -183,6 +198,7 @@ function Results({
   onRetry,
   onProbe,
   onSelectDevice,
+  onCompareDevices,
   shareUrl,
 }: {
   run: Run;
@@ -195,6 +211,7 @@ function Results({
   onRetry: () => void;
   onProbe: () => void;
   onSelectDevice: (strategy: Strategy) => void;
+  onCompareDevices: () => void;
   shareUrl: string;
 }) {
   const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -204,6 +221,7 @@ function Results({
   const findings = useMemo(() => (running ? [] : buildFindings(psi, probe, { platform: params.platform || undefined })), [running, psi, probe, params.platform]);
   const mobile = runs.mobile?.psi.state === 'done' && runs.mobile.psi.result.ok ? runs.mobile.psi.result.summary : null;
   const desktop = runs.desktop?.psi.state === 'done' && runs.desktop.psi.result.ok ? runs.desktop.psi.result.summary : null;
+  const pendingDevices = params.compare ? (['mobile', 'desktop'] as const).filter((strategy) => runs[strategy]?.psi.state === 'running') : run.psi.state === 'running' ? [run.strategy] : [];
   const fullReport = pageSpeedSiteUrl(run.url, run.strategy);
 
   const copyLink = async () => {
@@ -276,7 +294,7 @@ function Results({
             {running ? (
               <p className="flex items-center gap-2 text-cyan">
                 <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-cyan" aria-hidden="true" />
-                {run.psi.state === 'running' ? `Google is running a fresh ${run.strategy} lab test… ${elapsed} s elapsed (can take up to 90 s)` : 'The lab report is ready; finishing the optional browser timing check…'}
+                {pendingDevices.length > 0 ? `Google is running fresh ${pendingDevices.join(' and ')} lab tests… ${elapsed} s elapsed (can take up to 90 s)` : 'The lab report is ready; finishing the optional browser timing check…'}
               </p>
             ) : (
               <p className="text-muted">
@@ -289,8 +307,9 @@ function Results({
         {!running && (
           <div className="no-print flex flex-wrap gap-2">
             <Button variant="primary" onClick={onFresh}>
-              Run a fresh test
+              {params.compare ? 'Run both tests again' : 'Run a fresh test'}
             </Button>
+            {!params.compare && <Button onClick={onCompareDevices}>Compare mobile + desktop</Button>}
             <Button onClick={() => void copyLink()}>Copy share link</Button>
             <Button onClick={exportReport}>Export Report</Button>
             <Button variant="ghost" onClick={() => window.print()}>
@@ -304,7 +323,7 @@ function Results({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold">Test device</p>
-              <p className="text-xs text-muted">Each device is a separate Lighthouse run. Results are not mixed.</p>
+              <p className="text-xs text-muted">Switch the detailed report, or use the side-by-side comparison above. Each column is its own Lighthouse run.</p>
             </div>
             <div role="group" aria-label="Choose report device" className="flex gap-1 rounded-lg border border-line p-1">
               {(['mobile', 'desktop'] as const).map((option) => {
@@ -345,13 +364,13 @@ function Results({
           </Card>
           <Summary psi={psi} selectedPlatform={params.platform} />
           <InterpretationGuide />
+          {mobile && desktop && <DeviceComparison mobile={mobile} desktop={desktop} />}
           <Preview psi={psi} strategy={run.strategy} />
           <TimeBreakdown psi={psi} findings={findings} strategy={run.strategy} />
           <LcpSection psi={psi} strategy={run.strategy} />
           <Waterfall psi={psi} />
           <Findings findings={findings} reportUrl={fullReport} />
           <Metrics psi={psi} strategy={run.strategy} />
-          {mobile && desktop && <DeviceComparison mobile={mobile} desktop={desktop} />}
         </>
       )}
 
