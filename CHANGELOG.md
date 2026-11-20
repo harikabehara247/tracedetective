@@ -4,6 +4,33 @@ All notable changes are listed here. The format follows Keep a Changelog, and ve
 
 ## [Unreleased]
 
+## [0.4.0] - candidate
+
+Analyze a website first: a visual, evidence-backed report for any public URL, on any platform. Trace analysis becomes the optional advanced path.
+
+### Added
+- **Where the time went**: the LCP time split into server response, resource discovery, resource download and rendering (Lighthouse's own breakdown, labelled as a lab estimate), plus main-thread blocking time, and findings grouped by stage. When PageSpeed does not return the split, the report says so and links to it.
+- Final screenshot and loading filmstrip, a request waterfall (type, size, status, observed timing; render-blocking and LCP files marked; filter by type), and the LCP element with its selector and HTML. Its file is named only when the response ties it to the element, and the basis is shown.
+- Ranked findings that each show the measurement, its source, the loading stage, why it may matter, a next step, and possible causes marked as hypotheses. Savings are shown only as PageSpeed's own estimates. Supports Lighthouse 12 audits and Lighthouse 13 insights.
+- Platform detection from each platform's own file locations (WordPress, Elementor, Shopify, Next.js, Nuxt, Drupal, Squarespace, Wix, Webflow), with the method and an example file shown. Advice is platform-neutral unless a platform is detected or chosen under Advanced options (WordPress notes are available).
+- Chrome real-user data shows its collection period when the response includes it.
+- Share link (the report's address runs the same check), **Run a fresh test** (skips the 15-minute cache), mobile/desktop switch with a side-by-side comparison, and **Print or save as PDF**.
+- Trace onboarding: a plain definition, an illustration, a synthetic sample that opens at once, a downloadable synthetic OTLP JSON sample (labelled synthetic after import), a format guide and how to get a trace from common tools.
+- Synthetic test fixtures: real Lighthouse 13 output for two local test pages (platform-neutral and WordPress-style), hosts renamed; the real-user block in one fixture is made up and marked as such.
+
+### Changed
+- The home page leads with "Why is this page slow?" and a URL box. Navigation and the tour use **Analyze a website** and **Investigate a trace**.
+- Mobile/Desktop is next to the URL box; the browser probe and platform notes are under Advanced options.
+- The report explains that a public URL shows browser-visible delays but cannot identify an internal database query or code function, which needs an instrumented trace.
+- Analysis service: cache key versioned for the larger summary; `fresh=1` skips the cache read (still rate-limited).
+- Export Report (report version 2) includes platform detection with its method, the LCP element, requests and PageSpeed checks.
+
+### Removed
+- The old `urlFindings` helper, replaced by the new findings model.
+
+### Fixed
+- The request waterfall no longer widens the page on phones.
+
 ## [0.3.0] - 2026-11-19
 
 Website analysis without API keys.

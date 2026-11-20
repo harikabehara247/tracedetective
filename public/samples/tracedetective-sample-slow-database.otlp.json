@@ -1,0 +1,330 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "api-gateway"
+            }
+          },
+          {
+            "key": "tracedetective.synthetic",
+            "value": {
+              "boolValue": true
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "tracedetective-sample"
+          },
+          "spans": [
+            {
+              "traceId": "8a3c60f7d188f8fa79d48a391a778fa6",
+              "spanId": "f5135b2765fda469",
+              "name": "POST /api/orders",
+              "kind": 2,
+              "startTimeUnixNano": "1795000000000000000",
+              "endTimeUnixNano": "1795000003240000000",
+              "attributes": [
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/api/orders"
+                  }
+                },
+                {
+                  "key": "url.path",
+                  "value": {
+                    "stringValue": "/api/orders"
+                  }
+                },
+                {
+                  "key": "http.response.status_code",
+                  "value": {
+                    "intValue": "201"
+                  }
+                }
+              ],
+              "status": {
+                "code": 1
+              }
+            },
+            {
+              "traceId": "8a3c60f7d188f8fa79d48a391a778fa6",
+              "spanId": "5548710825af9134",
+              "parentSpanId": "f5135b2765fda469",
+              "name": "auth.v1.Tokens/Verify",
+              "kind": 3,
+              "startTimeUnixNano": "1795000000004000000",
+              "endTimeUnixNano": "1795000000022000000",
+              "attributes": [
+                {
+                  "key": "rpc.system",
+                  "value": {
+                    "stringValue": "grpc"
+                  }
+                },
+                {
+                  "key": "rpc.service",
+                  "value": {
+                    "stringValue": "auth.v1.Tokens"
+                  }
+                },
+                {
+                  "key": "rpc.method",
+                  "value": {
+                    "stringValue": "Verify"
+                  }
+                },
+                {
+                  "key": "server.address",
+                  "value": {
+                    "stringValue": "auth.internal.example"
+                  }
+                }
+              ],
+              "status": {
+                "code": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "order-service"
+            }
+          },
+          {
+            "key": "tracedetective.synthetic",
+            "value": {
+              "boolValue": true
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "tracedetective-sample"
+          },
+          "spans": [
+            {
+              "traceId": "8a3c60f7d188f8fa79d48a391a778fa6",
+              "spanId": "da724c619bef80ee",
+              "parentSpanId": "f5135b2765fda469",
+              "name": "POST /orders",
+              "kind": 2,
+              "startTimeUnixNano": "1795000000026000000",
+              "endTimeUnixNano": "1795000003228000000",
+              "attributes": [
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/orders"
+                  }
+                },
+                {
+                  "key": "http.response.status_code",
+                  "value": {
+                    "intValue": "201"
+                  }
+                }
+              ],
+              "status": {
+                "code": 1
+              }
+            },
+            {
+              "traceId": "8a3c60f7d188f8fa79d48a391a778fa6",
+              "spanId": "0f3b178636b9d7b2",
+              "parentSpanId": "da724c619bef80ee",
+              "name": "SELECT inventory",
+              "kind": 3,
+              "startTimeUnixNano": "1795000000032000000",
+              "endTimeUnixNano": "1795000002684000000",
+              "attributes": [
+                {
+                  "key": "db.system.name",
+                  "value": {
+                    "stringValue": "postgresql"
+                  }
+                },
+                {
+                  "key": "db.namespace",
+                  "value": {
+                    "stringValue": "shop"
+                  }
+                },
+                {
+                  "key": "db.operation.name",
+                  "value": {
+                    "stringValue": "SELECT"
+                  }
+                },
+                {
+                  "key": "db.query.text",
+                  "value": {
+                    "stringValue": "SELECT sku, qty_available FROM inventory WHERE sku = ANY($1)"
+                  }
+                },
+                {
+                  "key": "db.response.returned_rows",
+                  "value": {
+                    "intValue": "18"
+                  }
+                }
+              ],
+              "status": {
+                "code": 1
+              }
+            },
+            {
+              "traceId": "8a3c60f7d188f8fa79d48a391a778fa6",
+              "spanId": "0da3174c441a36c8",
+              "parentSpanId": "da724c619bef80ee",
+              "name": "payment.authorize",
+              "kind": 3,
+              "startTimeUnixNano": "1795000002688000000",
+              "endTimeUnixNano": "1795000002898000000",
+              "attributes": [
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "POST"
+                  }
+                },
+                {
+                  "key": "server.address",
+                  "value": {
+                    "stringValue": "payments.internal.example"
+                  }
+                },
+                {
+                  "key": "url.full",
+                  "value": {
+                    "stringValue": "http://payments.internal.example/v1/authorize"
+                  }
+                },
+                {
+                  "key": "http.response.status_code",
+                  "value": {
+                    "intValue": "200"
+                  }
+                }
+              ],
+              "status": {
+                "code": 1
+              }
+            },
+            {
+              "traceId": "8a3c60f7d188f8fa79d48a391a778fa6",
+              "spanId": "e9759dce25fac866",
+              "parentSpanId": "da724c619bef80ee",
+              "name": "INSERT orders",
+              "kind": 3,
+              "startTimeUnixNano": "1795000002904000000",
+              "endTimeUnixNano": "1795000002950000000",
+              "attributes": [
+                {
+                  "key": "db.system.name",
+                  "value": {
+                    "stringValue": "postgresql"
+                  }
+                },
+                {
+                  "key": "db.namespace",
+                  "value": {
+                    "stringValue": "shop"
+                  }
+                },
+                {
+                  "key": "db.operation.name",
+                  "value": {
+                    "stringValue": "INSERT"
+                  }
+                },
+                {
+                  "key": "db.query.text",
+                  "value": {
+                    "stringValue": "INSERT INTO orders (customer_id, total_cents, status) VALUES ($1, $2, $3) RETURNING id"
+                  }
+                }
+              ],
+              "status": {
+                "code": 1
+              }
+            },
+            {
+              "traceId": "8a3c60f7d188f8fa79d48a391a778fa6",
+              "spanId": "489e897ba1c89bbb",
+              "parentSpanId": "da724c619bef80ee",
+              "name": "publish order.created",
+              "kind": 4,
+              "startTimeUnixNano": "1795000002954000000",
+              "endTimeUnixNano": "1795000002968000000",
+              "attributes": [
+                {
+                  "key": "messaging.system",
+                  "value": {
+                    "stringValue": "kafka"
+                  }
+                },
+                {
+                  "key": "messaging.destination.name",
+                  "value": {
+                    "stringValue": "order.created"
+                  }
+                },
+                {
+                  "key": "messaging.operation.type",
+                  "value": {
+                    "stringValue": "send"
+                  }
+                }
+              ],
+              "status": {
+                "code": 1
+              }
+            },
+            {
+              "traceId": "8a3c60f7d188f8fa79d48a391a778fa6",
+              "spanId": "a7cab8ee0f248610",
+              "parentSpanId": "da724c619bef80ee",
+              "name": "serialize response",
+              "kind": 1,
+              "startTimeUnixNano": "1795000002970000000",
+              "endTimeUnixNano": "1795000003018000000",
+              "attributes": [],
+              "status": {
+                "code": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

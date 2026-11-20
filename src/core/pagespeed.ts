@@ -19,11 +19,14 @@ export interface PageSpeedOptions {
   proxyUrl?: string;
   signal?: AbortSignal;
   fetch?: typeof fetch;
+  /** Ask the analysis service for a new test instead of a cached result (keyless mode never caches). */
+  fresh?: boolean;
 }
 
-export function proxyRequestUrl(proxyUrl: string, url: string, strategy: Strategy): string {
+export function proxyRequestUrl(proxyUrl: string, url: string, strategy: Strategy, fresh = false): string {
   const base = proxyUrl.replace(/\/+$/, '');
   const p = new URLSearchParams({ url, strategy });
+  if (fresh) p.set('fresh', '1');
   return `${base}/v1/pagespeed?${p.toString()}`;
 }
 
@@ -57,7 +60,7 @@ export async function runPageSpeed(url: string, strategy: Strategy, options: Pag
 
   let res: Response;
   try {
-    res = await f(proxyRequestUrl(proxyUrl, url, strategy), { signal, credentials: 'omit', referrerPolicy: 'no-referrer' });
+    res = await f(proxyRequestUrl(proxyUrl, url, strategy, options.fresh), { signal, credentials: 'omit', referrerPolicy: 'no-referrer' });
   } catch (err) {
     if (signal?.aborted) return { ok: false, via: 'proxy', error: explainPsiError(null, null, abortReason(signal)) };
     // Proxy unreachable (outage, blocked by an extension): fall back to Google directly.

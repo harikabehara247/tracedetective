@@ -1,7 +1,7 @@
 import type { Comparison } from './compare';
 import type { TraceAnalysis } from './types';
 
-export const TOOL = { name: 'TraceDetective', version: '0.3.0' } as const;
+export const TOOL = { name: 'TraceDetective', version: '0.4.0' } as const;
 
 export type TraceSource =
   | { kind: 'sample'; sampleId: string }

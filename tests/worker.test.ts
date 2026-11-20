@@ -176,4 +176,15 @@ describe('PageSpeed proxy', () => {
     expect((await s.call(q('example.com'))).status).toBe(200);
     expect(s.cache.store.size).toBe(1);
   });
+
+  it('skips the cache read for fresh=1 but still rate-limits and refreshes the cache', async () => {
+    const { call, fetchMock, env, cache } = setup();
+    await call(q('example.com'));
+    const fresh = await call(`${q('example.com')}&fresh=1`);
+    expect((await fresh.json()).cached).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((env.IP_LIMITER as ReturnType<typeof limiter>).calls).toHaveLength(2);
+    expect(cache.store.size).toBe(1);
+    expect([...cache.store.keys()][0]).toMatch(/\/v2\?/); // cache key carries the summary version
+  });
 });

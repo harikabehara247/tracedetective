@@ -4,9 +4,11 @@
 
 **Find the bottleneck. Understand the cause. Fix it faster.**
 
-TraceDetective is a free, open-source, browser-first tool for investigating slow websites and API requests. Check a public URL from outside, or load a trace and see a nested waterfall, the critical path, time by service and rule-based insights that show their evidence. Compare a healthy trace with a slow one to see what changed. Everything runs in your browser; traces are never uploaded.
+TraceDetective is a free, open-source tool for investigating slow web pages. Paste any public URL, on any platform, and see how the page performed on mobile and desktop, where the measured time went while it loaded, which evidence points to the biggest delays, and what to check first. No account, API key, source code, trace file or plugin is needed.
 
-It is an investigation aid for single traces. It is not a production monitoring system, and its insights are hypotheses to verify, not proven root causes.
+A URL check shows what a visitor's browser can observe. It cannot identify an internal database query or code function; that needs an instrumented trace. If your application records traces, the optional **Investigate a trace** path shows a nested waterfall, the critical path, time by service and rule-based insights. Traces are analysed in your browser and never uploaded.
+
+It is an investigation aid, not a production monitoring system. Findings state what was measured; possible causes are labelled as hypotheses to verify.
 
 ## Features
 
@@ -20,9 +22,14 @@ It is an investigation aid for single traces. It is not a production monitoring 
 | Two-trace comparison with matched spans, deltas, added/removed spans and new errors | Available |
 | JSON export with provenance, and a print-friendly report (save as PDF from the browser) | Available |
 | Native OpenTelemetry import: OTLP/JSON, Collector file exporter JSON Lines, Grafana Tempo API responses | Available |
-| Website analysis: enter a URL and press Analyze Website. HTTP status, redirects, server response time, Lighthouse lab metrics and Chrome real-user data (shown separately) via Google PageSpeed Insights, plus optional timing from your own browser | Available. No account or API key: the project's analysis service holds the key on the server. |
+| **Analyze a website** (primary): HTTP status, redirects, final URL and server response time; Lighthouse lab results for mobile and desktop; Chrome real-user data with its 28-day window, shown separately | Available. No account or API key: the project's analysis service holds the key on the server. |
+| Where the time went: the LCP time split into server response, resource discovery, resource download and rendering, plus main-thread blocking time, when PageSpeed returns them | Available |
+| Screenshot, loading filmstrip, request waterfall (type, size, timing, render-blocking and LCP marked) and the LCP element with its file, when PageSpeed ties them together | Available |
+| Ranked findings with the measurement, its source, the loading stage, why it may matter, a next check, and possible causes marked as hypotheses | Available |
+| Platform detection from the platform's own file locations (WordPress, Elementor, Shopify, Next.js, Nuxt, Drupal, Squarespace, Wix, Webflow), with the method shown. Advice is platform-neutral unless a platform is detected or chosen | Available |
+| Share link, rerun, mobile/desktop comparison, Export Report and print | Available |
 | DNS / TCP / TLS breakdown for a URL | Only when the target sends `Timing-Allow-Origin` |
-| Guided first-visit walkthrough and a "Start analysis" chooser | Available |
+| Guided first-visit walkthrough, a "What is a trace?" introduction with a synthetic sample to open or download | Available |
 | Live ingestion, storage, alerting | Not planned |
 
 ## Quick start

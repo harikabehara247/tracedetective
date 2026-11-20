@@ -24,19 +24,31 @@ test.describe('first visit', () => {
   });
 });
 
-test('Start analysis explains the three modes and each one opens', async ({ page }) => {
-  await page.goto('./');
-  await page.getByRole('link', { name: 'Start analysis' }).first().click();
+test('the start page explains the three modes and each one opens', async ({ page }) => {
+  await page.goto('analyze');
   await expect(page.getByRole('heading', { level: 1, name: 'Start analysis' })).toBeVisible();
   for (const [cta, heading] of [
     ['Analyze a website', 'Analyze a website'],
-    ['Import a trace', 'Import a JSON trace'],
+    ['Investigate a trace', 'What is a trace?'],
     ['Open the demos', /Slow database query/],
   ] as const) {
     await page.goto('analyze');
-    await page.getByRole('link', { name: cta }).click();
+    await page.getByRole('main').getByRole('link', { name: cta, exact: true }).click();
     await expect(page.getByRole('heading', { name: heading }).first()).toBeVisible();
   }
+});
+
+test('trace onboarding opens the synthetic sample and serves the sample download', async ({ page, request }) => {
+  await page.goto('analyze/upload');
+  await expect(page.getByText('A trace is a timed record of one request moving through an application and its services.')).toBeVisible();
+  const dl = page.getByRole('link', { name: 'Download sample trace (synthetic, OTLP JSON)' });
+  const href = await dl.getAttribute('href');
+  const res = await request.get(new URL(href!, page.url()).href);
+  expect(res.status()).toBe(200);
+  expect(JSON.stringify(await res.json())).toContain('tracedetective.synthetic');
+  await page.getByRole('link', { name: 'Open a synthetic sample' }).click();
+  await expect(page.getByText('Synthetic sample data').first()).toBeVisible();
+  await expect(page.getByRole('tree')).toBeVisible();
 });
 
 test('demo cards open every sample trace', async ({ page }) => {

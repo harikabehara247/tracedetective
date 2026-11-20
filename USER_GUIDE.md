@@ -1,36 +1,40 @@
 # TraceDetective user guide
 
-TraceDetective helps you find out why a website or API request is slow or failing. It runs in your browser: no account, no install, and trace files never leave your machine.
+TraceDetective helps you find out why a web page is slow. Paste any public URL, on any platform: no account, API key, source code, trace file or plugin. Trace files, if you use them, are analysed in your browser and never leave your machine.
 
-Open it at https://harikabehara247.github.io/tracedetective/ and choose **Start analysis**.
+Open it at https://harikabehara247.github.io/tracedetective/ and paste a URL on the home page, or choose **Analyze a website**.
 
 ## Which mode should I use?
 
 | You have… | Use | You get | You do not get |
 | --- | --- | --- | --- |
-| A public URL that feels slow | **Check website URL** | HTTP status, redirects, server response time, page-load metrics, real-user data when Google has it, your own response times | Anything inside the server (database, queries, code) |
-| A trace from OpenTelemetry or another tracer | **Upload trace** | Waterfall, critical path, self time, insights with evidence, comparison | Live monitoring or percentiles across many requests |
-| Nothing yet, just curious | **Explore demo** | Four synthetic traces showing common problems | Real measurements |
+| A public URL that feels slow | **Analyze a website** (start here) | Mobile and desktop lab results, where the time went, a screenshot and filmstrip, every request, the LCP element, real-user data when Google has it, and ranked findings | Anything inside the server (code, functions, database queries) |
+| A trace from OpenTelemetry or a tracing tool | **Investigate a trace** (advanced) | Waterfall, critical path, self time, insights with evidence, comparison | Live monitoring or percentiles across many requests |
+| Nothing yet, just curious | **Explore demo traces** | Four synthetic traces showing common problems | Real measurements |
 
-A common path: website analysis shows the server is slow to respond, so you capture a trace of that request and upload it to see which operation is responsible.
+A common path: the website report shows the server is slow to respond, so you capture a trace of that request in your application and import it to see which measured step took the time.
 
-## Analyze website
+## Analyze a website
 
-1. Enter a public address, for example `example.com` or `https://www.example.com/pricing`. `https://` is added if you leave it out.
-2. Press **Analyze Website**. There is no account, registration or API key. The test takes 15–60 seconds and you can cancel at any time.
+1. Paste a public address, for example `example.com` or `https://www.example.com/pricing`. `https://` is added if you leave it out.
+2. Choose **Mobile** (a mid-range phone on slow 4G, the default) or **Desktop**, and press **Analyze Website**. The test takes 15–60 seconds and you can cancel at any time.
 3. Optional, under **Advanced options**:
-   - **Test device**: Mobile (the default, a mid-range phone on slow 4G) or Desktop.
+   - **Platform-specific notes**: advice is platform-neutral by default. Choose a platform (currently WordPress) to add its notes to findings even when it is not detected.
    - **Also time the site from my browser**: your browser requests the address 5 times and times each answer from your network. Browsers keep other sites’ responses private (CORS), so this cannot see status codes, redirects or content, and shows DNS, TCP and TLS times only when the site sends a `Timing-Allow-Origin` header. Some sites and browser extensions block it.
 
-**Reading the results**
+The report's address is a share link: opening it runs the same check (results are reused for 15 minutes). **Run a fresh test** skips that reuse after you change the site. **Test on desktop** / **Test on mobile** runs the other device and adds a side-by-side comparison.
 
-- *Overview*: HTTP status, redirects, server response time and the Lighthouse performance score.
-- *Lab test* (Lighthouse, simulated): one page load in Google’s test environment. Good for finding causes and comparing changes, not a measure of what visitors experience on average.
-- *Real users* (Chrome UX Report, last 28 days): what real Chrome users experienced, at the 75th percentile. Only shown when Google has enough visits for the page or site. Low-traffic sites will see "Not available".
-- *From your browser*: only when you chose the browser probe.
-- *Findings* appear only when a measurement crosses a stated threshold. Each lists its evidence, its source (lab, real users or browser) and what to check next.
-- *How these numbers were measured* explains each method.
-- **Export Report** saves everything as JSON with the time, tool version and your browser's user agent. **Full report on PageSpeed Insights** opens Google's own report for the same address.
+**Reading the report**
+
+- *Summary*: score, HTTP status, redirects, server response time, page weight, the final address, and the platform if one was detected, with the detection method and an example file. A platform is named only when files from its own locations appear in the request list (for example `/wp-content/`, `/_next/static/`, `cdn.shopify.com`); otherwise the report says it was not identified.
+- *Where the time went*: the time until the main content appeared (LCP), split into server response, resource discovery, resource download and rendering, as PageSpeed measured it, plus main-thread blocking time. If PageSpeed does not return the split, the report says so and links to its LCP breakdown.
+- *What to check next*: ranked findings. Each one shows what was measured, its source (lab test, request log, real users or your browser), the loading stage it concerns, why it may matter, a practical next step, and possible causes marked as hypotheses. Savings figures are PageSpeed's own estimates and are labelled as such.
+- *What the test browser saw*: the final screenshot and the loading filmstrip.
+- *Lab test* (Lighthouse, simulated) and *Real users* (Chrome UX Report, the 28-day window shown when Google returns it): kept separate. Low-traffic sites will see "Not available" for real users.
+- *Main content: the LCP element*: the element, its selector and HTML, and its file only when PageSpeed ties the file to the element (the basis is stated).
+- *Requests*: every request in order with type, size, status and observed timing; render-blocking files and the LCP file are marked.
+- *What this report can and cannot see* and *How these numbers were measured* explain the limits. A URL check cannot identify an internal database query or code function.
+- **Export Report** saves everything as JSON with the time, tool version and your browser's user agent. **Print or save as PDF** prints the report. **Full report on PageSpeed Insights** opens Google's own report for the same address.
 
 **When the test cannot run**, the page says why and shows no numbers rather than empty or made-up ones:
 
@@ -41,7 +45,10 @@ A common path: website analysis shows the server is slow to respond, so you capt
 
 **What is refused:** local and private addresses (`localhost`, `192.168.x.x`, `10.x.x.x`, `169.254.169.254` and similar), URLs with a username or password, and URLs whose query string looks like it holds a secret (`?token=`, `?key=`, `?sig=`…). Remove the secret and try again.
 
-## Upload trace
+## Investigate a trace
+
+A trace is a timed record of one request moving through an application and its services. It can show which measured steps took time. Your application has to record traces (for example with OpenTelemetry); most sites and frameworks do not do this by default. The **Investigate a trace** page shows an illustration, a synthetic sample you can open at once, and a synthetic OTLP JSON file you can download to try the import.
+
 
 Accepted formats (up to 2 MB, 10,000 spans):
 
@@ -56,7 +63,7 @@ If a file holds several traces, the one with the most spans opens and a warning 
 
 Imported traces stay in this browser tab until you close it. Remove them sooner under *Imported in this tab*.
 
-**Getting a trace out of your service:** see *Start analysis → How to export a trace* for Collector and Tempo examples.
+**Getting a trace out of your service:** see *Investigate a trace → Step-by-step export guide* for OpenTelemetry Collector and Grafana Tempo examples. Jaeger, Zipkin and commercial APM formats are not read directly; if they receive OpenTelemetry data, also send it to a Collector with the file exporter.
 
 ## The trace workspace
 
@@ -77,7 +84,7 @@ Open **Compare**, pick a baseline (for example a healthy request) and a current 
 
 ## Walkthrough
 
-A short tour opens on your first visit. Reopen it with **Take the tour** on Start analysis or in the footer.
+A short tour opens on your first visit. Reopen it with **Take the tour** on the start page (`/analyze`) or in the footer.
 
 ## Privacy in one paragraph
 

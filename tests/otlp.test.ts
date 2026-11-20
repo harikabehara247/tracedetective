@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeTrace, convertOtlp, parseTraceText } from '../src/core';
+import sampleOtlp from '../public/samples/tracedetective-sample-slow-database.otlp.json';
 
 /** Synthetic OTLP/JSON shaped like an OpenTelemetry Collector file exporter's output. */
 const T = '5b8efff798038103d269b633813fc60c';
@@ -152,5 +153,12 @@ describe('OTLP container formats', () => {
   it('accepts Tempo v1 (batches) and v2 (trace.resourceSpans) responses', () => {
     expect(parseTraceText(JSON.stringify({ batches: SAMPLE.resourceSpans })).ok).toBe(true);
     expect(parseTraceText(JSON.stringify({ trace: { resourceSpans: SAMPLE.resourceSpans } })).ok).toBe(true);
+  });
+
+  it('keeps the downloadable sample labelled synthetic, and ordinary imports not', () => {
+    const sample = parseTraceText(JSON.stringify(sampleOtlp));
+    expect(sample.ok && sample.trace.synthetic).toBe(true);
+    const plain = parseTraceText(JSON.stringify(SAMPLE));
+    expect(plain.ok && plain.trace.synthetic).toBe(false);
   });
 });

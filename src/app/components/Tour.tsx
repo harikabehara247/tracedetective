@@ -31,16 +31,16 @@ const STEPS = [
   {
     title: 'Welcome to TraceDetective',
     body: [
-      'TraceDetective helps you find out why a request is slow or failing. It runs in your browser, with no account and no tracking.',
+      'TraceDetective helps you find out why a web page is slow. Paste any public URL to start. It runs in your browser, with no account and no tracking.',
       'This short tour shows the three ways to start and how to read the results. It takes under a minute.',
     ],
   },
   {
     title: 'Three ways to start',
     body: [
-      'Analyze website: enter a public address, no account or API key needed. Measures it from outside, with HTTP status, redirects, server response time and page-load metrics. It cannot see database or code timing.',
-      'Upload trace: import an OpenTelemetry (OTLP JSON) or TraceDetective JSON trace to see exactly which operation took the time.',
-      'Explore demo: four synthetic traces that show common problems. They are clearly labelled as synthetic.',
+      'Analyze a website (start here): paste any public URL, no account, API key or plugin needed. It shows how the page loaded on mobile and desktop, where the time went, and what to check first. It cannot see code or database timing.',
+      'Investigate a trace (advanced): if your application records traces, import one (OTLP JSON, Collector JSON Lines or Tempo) to see which measured steps took time.',
+      'Explore demo traces: four synthetic traces that show common problems. They are clearly labelled as synthetic.',
     ],
   },
   {
@@ -176,9 +176,9 @@ export function Tour() {
             {step > 0 && <Button onClick={() => setStep(step - 1)}>Back</Button>}
             {lastStep ? (
               <>
-                <Button onClick={() => go('/analyze/url')}>Analyze a website</Button>
-                <Button variant="primary" onClick={() => go(`/trace/${sampleTraceId('slow-database')}`)}>
-                  Open the demo
+                <Button onClick={() => go(`/trace/${sampleTraceId('slow-database')}`)}>Open the demo trace</Button>
+                <Button variant="primary" onClick={() => go('/analyze/url')}>
+                  Analyze a website
                 </Button>
               </>
             ) : (
