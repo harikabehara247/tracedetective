@@ -8,6 +8,7 @@ import {
   Boundary,
   DeviceComparison,
   Findings,
+  InterpretationGuide,
   LcpSection,
   TimeBreakdown,
   Methodology,
@@ -126,11 +127,10 @@ export function UrlCheck() {
 
   const go = (p: CheckParams, replaceNonce = true) => navigate(`${reportPath(p)}${replaceNonce ? `&run=${Date.now().toString(36)}` : ''}`);
 
-  const runOtherDevice = () => {
-    if (!params) return;
-    const other: Strategy = device === 'mobile' ? 'desktop' : 'mobile';
-    if (runs[other]?.psi.state === 'done') navigate(reportPath({ ...params, device: other }));
-    else go({ ...params, device: other });
+  const selectDevice = (next: Strategy) => {
+    if (!params || next === device) return;
+    if (runs[next]?.psi.state === 'done') navigate(reportPath({ ...params, device: next }));
+    else go({ ...params, device: next });
   };
 
   return (
@@ -162,7 +162,7 @@ export function UrlCheck() {
             cancelledRef.current = false;
             void probeTask(device, run.url).then(() => update(device, { finishedAt: new Date() }));
           }}
-          onOtherDevice={runOtherDevice}
+          onSelectDevice={selectDevice}
           shareUrl={`${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, '')}${reportPath(params)}`}
         />
       )}
@@ -182,7 +182,7 @@ function Results({
   onFresh,
   onRetry,
   onProbe,
-  onOtherDevice,
+  onSelectDevice,
   shareUrl,
 }: {
   run: Run;
@@ -194,7 +194,7 @@ function Results({
   onFresh: () => void;
   onRetry: () => void;
   onProbe: () => void;
-  onOtherDevice: () => void;
+  onSelectDevice: (strategy: Strategy) => void;
   shareUrl: string;
 }) {
   const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -202,7 +202,6 @@ function Results({
   const psi = result?.ok ? result.summary : null;
   const probe = run.probe.state === 'ok' ? run.probe.summary : null;
   const findings = useMemo(() => (running ? [] : buildFindings(psi, probe, { platform: params.platform || undefined })), [running, psi, probe, params.platform]);
-  const other: Strategy = run.strategy === 'mobile' ? 'desktop' : 'mobile';
   const mobile = runs.mobile?.psi.state === 'done' && runs.mobile.psi.result.ok ? runs.mobile.psi.result.summary : null;
   const desktop = runs.desktop?.psi.state === 'done' && runs.desktop.psi.result.ok ? runs.desktop.psi.result.summary : null;
   const fullReport = pageSpeedSiteUrl(run.url, run.strategy);
@@ -277,7 +276,7 @@ function Results({
             {running ? (
               <p className="flex items-center gap-2 text-cyan">
                 <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-cyan" aria-hidden="true" />
-                {run.psi.state === 'running' ? `Loading the page in Google’s test browser (${run.strategy})… ${elapsed} s (usually 15–60 s)` : 'Finishing the browser timing check…'}
+                {run.psi.state === 'running' ? `Google is running a fresh ${run.strategy} lab test… ${elapsed} s elapsed (can take up to 90 s)` : 'The lab report is ready; finishing the optional browser timing check…'}
               </p>
             ) : (
               <p className="text-muted">
@@ -292,7 +291,6 @@ function Results({
             <Button variant="primary" onClick={onFresh}>
               Run a fresh test
             </Button>
-            <Button onClick={onOtherDevice}>{runs[other]?.psi.state === 'done' ? `View ${other}` : `Test on ${other}`}</Button>
             <Button onClick={() => void copyLink()}>Copy share link</Button>
             <Button onClick={exportReport}>Export Report</Button>
             <Button variant="ghost" onClick={() => window.print()}>
@@ -301,6 +299,27 @@ function Results({
           </div>
         )}
       </div>
+      {!running && (
+        <div className="rounded-xl border border-line bg-surface-2/50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">Test device</p>
+              <p className="text-xs text-muted">Each device is a separate Lighthouse run. Results are not mixed.</p>
+            </div>
+            <div role="group" aria-label="Choose report device" className="flex gap-1 rounded-lg border border-line p-1">
+              {(['mobile', 'desktop'] as const).map((option) => {
+                const isActive = run.strategy === option;
+                const done = runs[option]?.psi.state === 'done';
+                return (
+                  <button key={option} type="button" aria-pressed={isActive} onClick={() => onSelectDevice(option)} className={`rounded-md px-4 py-2 text-sm font-semibold capitalize ${isActive ? 'bg-violet text-navy' : 'text-muted hover:text-ink'}`}>
+                    {option}{done && !isActive ? ' · ready' : ''}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       {copied !== 'idle' && (
         <p role="status" className="no-print text-sm">
           {copied === 'copied' ? 'Link copied. Opening it runs the same check (results are reused for 15 minutes).' : 'Copy failed. Copy this link:'}{' '}
@@ -325,13 +344,14 @@ function Results({
             <Verdict psi={psi} findings={findings} />
           </Card>
           <Summary psi={psi} selectedPlatform={params.platform} />
-          <TimeBreakdown psi={psi} findings={findings} strategy={run.strategy} />
-          <Findings findings={findings} reportUrl={fullReport} />
+          <InterpretationGuide />
           <Preview psi={psi} strategy={run.strategy} />
-          <Metrics psi={psi} strategy={run.strategy} />
-          {mobile && desktop && <DeviceComparison mobile={mobile} desktop={desktop} />}
+          <TimeBreakdown psi={psi} findings={findings} strategy={run.strategy} />
           <LcpSection psi={psi} strategy={run.strategy} />
           <Waterfall psi={psi} />
+          <Findings findings={findings} reportUrl={fullReport} />
+          <Metrics psi={psi} strategy={run.strategy} />
+          {mobile && desktop && <DeviceComparison mobile={mobile} desktop={desktop} />}
         </>
       )}
 

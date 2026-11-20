@@ -38,6 +38,8 @@ describe('website report', () => {
     expect(card).toBeTruthy();
     expect(screen.getByText(/Main-thread work:/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Findings by stage' })).toBeInTheDocument();
+    expect(screen.getByText(/Largest measured delay:/)).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /LCP .*Server response/ })).toBeInTheDocument();
 
     const findings = screen.getByRole('heading', { name: 'What to check next' }).closest('div')!.parentElement!;
     const first = within(findings).getAllByRole('article')[0]!;
@@ -59,6 +61,10 @@ describe('website report', () => {
     expect(screen.getAllByText(/static\/img\/hero\.jpg/).length).toBeGreaterThan(0);
     expect(screen.getByText(/“Improve image delivery” audit lists this request for the LCP element/)).toBeInTheDocument();
     expect(screen.getAllByText('LCP').length).toBeGreaterThan(0); // waterfall marks the LCP request
+    expect(screen.getByRole('columnheader', { name: 'Duration' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Longest/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /API-like · Fetch\/XHR/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'From PageSpeed data to a developer starting point' })).toBeInTheDocument();
   });
 
   it('keeps advice platform-neutral when no platform is detected', async () => {
@@ -131,7 +137,7 @@ describe('website report', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Run a fresh test' }));
     await screen.findByRole('heading', { name: 'Where the time went' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    await userEvent.click(screen.getByRole('button', { name: /Test on desktop/ }));
+    await userEvent.click(within(screen.getByRole('group', { name: 'Choose report device' })).getByRole('button', { name: 'desktop' }));
     expect(await screen.findByText('Chrome UX Report · rolling 28 days')).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([u]) => String(u).includes('strategy=desktop'))).toBe(true);
   });
