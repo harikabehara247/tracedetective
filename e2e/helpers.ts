@@ -32,7 +32,7 @@ export function trackProblems(page: Page, allow404Document = false) {
     problems.push(`HTTP ${r.status()} ${r.url()}`);
   });
   page.on('requestfailed', (r) => {
-    if (r.failure()?.errorText.includes('ERR_ABORTED')) return;
+    if (/ERR_ABORTED|NS_BINDING_ABORTED/.test(r.failure()?.errorText ?? '')) return;
     problems.push(`failed: ${r.url()} ${r.failure()?.errorText}`);
   });
   return problems;
